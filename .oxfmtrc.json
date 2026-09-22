@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 80,
+  "sortPackageJson": false,
+  "sortImports": {
+    "groups": [
+      "side_effect",
+      ["value-builtin", "type-builtin"],
+      ["value-external", "type-external"],
+      ["value-internal", "type-internal"],
+      [
+        "value-parent",
+        "value-sibling",
+        "value-index",
+        "type-parent",
+        "type-sibling",
+        "type-index"
+      ]
+    ]
+  },
+  "ignorePatterns": [
+    "package-lock.json",
+    "dist",
+    "coverage",
+    "src/routeTree.gen.ts"
+  ]
+}
