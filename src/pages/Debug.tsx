@@ -6,7 +6,7 @@ import { WikiIntro } from "../components/WikiIntro";
 import { dcReadFile } from "../lib/blueretro/dcReadFile";
 import { downloadFile } from "../lib/blueretro/downloadFile";
 import { log } from "../lib/logger";
-import { resetProgress, setProgress, showProgressBar } from "../lib/progress";
+import { setProgress } from "../lib/progress";
 import type { CancelRef } from "../lib/types";
 
 export function Debug() {
@@ -21,8 +21,6 @@ export function Debug() {
   }
 
   async function pakRead() {
-    resetProgress();
-    showProgressBar();
     setTransferring(true);
     try {
       const value = await dcReadFile(

@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useRef } from "react";
 
 import { useBlueRetro } from "../components/BlueRetroContext";
 import { ProgressBar } from "../components/ProgressBar";
@@ -6,9 +7,10 @@ import { WikiIntro } from "../components/WikiIntro";
 import { dcReadFile } from "../lib/blueretro/dcReadFile";
 import { dcWriteFile } from "../lib/blueretro/dcWriteFile";
 import { downloadFile } from "../lib/blueretro/downloadFile";
+import { gattSerial } from "../lib/blueretro/gattSerial";
 import { vmuSize } from "../lib/constants";
 import { log } from "../lib/logger";
-import { resetProgress, setProgress, showProgressBar } from "../lib/progress";
+import { setProgress } from "../lib/progress";
 import type { CancelRef } from "../lib/types";
 
 function swapBytes(data: ArrayBuffer) {
@@ -20,39 +22,50 @@ function swapBytes(data: ArrayBuffer) {
 
 export function DcVmu() {
   const { connected, serviceRef } = useBlueRetro();
-  const [transferring, setTransferring] = useState(false);
   // Real ref object so the recursive readers/writers' cancel check works
   // (the old code passed a plain number, which made Cancel a no-op).
   const cancelRef = useRef<CancelRef>({ current: 0 });
+
+  const vmuReadMutation = useMutation({
+    mutationFn: () =>
+      gattSerial(() =>
+        dcReadFile(serviceRef.current!, setProgress, cancelRef.current),
+      ),
+    onSuccess: (value) => {
+      swapBytes(value.buffer as ArrayBuffer);
+      downloadFile(
+        new Blob([value.buffer as ArrayBuffer], { type: "application/bin" }),
+        "vmu.bin",
+      );
+    },
+    onError: (error) => log("Argh! " + error),
+    onSettled: () => {
+      cancelRef.current.current = 0;
+    },
+  });
+
+  const vmuWriteMutation = useMutation({
+    mutationFn: (data: ArrayBuffer) =>
+      gattSerial(() =>
+        dcWriteFile(serviceRef.current!, data, setProgress, cancelRef.current),
+      ),
+    onError: (error) => log("Argh! " + error),
+    onSettled: () => {
+      cancelRef.current.current = 0;
+    },
+  });
+
+  const transferring = vmuReadMutation.isPending || vmuWriteMutation.isPending;
 
   function abortFileTransfer() {
     cancelRef.current.current = 1;
   }
 
   function pakRead() {
-    resetProgress();
-    showProgressBar();
-    setTransferring(true);
-    dcReadFile(serviceRef.current!, setProgress, cancelRef.current)
-      .then((value) => {
-        swapBytes(value.buffer as ArrayBuffer);
-        downloadFile(
-          new Blob([value.buffer as ArrayBuffer], { type: "application/bin" }),
-          "vmu.bin",
-        );
-        cancelRef.current.current = 0;
-      })
-      .catch((error) => {
-        log("Argh! " + error);
-        cancelRef.current.current = 0;
-      })
-      .finally(() => {
-        setTransferring(false);
-      });
+    vmuReadMutation.mutate();
   }
 
   function pakWrite() {
-    resetProgress();
     const reader = new FileReader();
     reader.onerror = () => {
       log("An error occurred reading this file.");
@@ -63,20 +76,9 @@ export function DcVmu() {
     reader.onload = function () {
       const data = (reader.result as ArrayBuffer).slice(0, vmuSize);
       swapBytes(data);
-      showProgressBar();
-      setTransferring(true);
-      dcWriteFile(serviceRef.current!, data, setProgress, cancelRef.current)
-        .then(() => {
-          cancelRef.current.current = 0;
-        })
-        .catch((error) => {
-          log("Argh! " + error);
-          cancelRef.current.current = 0;
-        })
-        .finally(() => {
-          setTransferring(false);
-        });
+      vmuWriteMutation.mutate(data);
     };
+    // Read in the image file as a binary string.
     reader.readAsArrayBuffer(
       (document.getElementById("pakFile") as HTMLInputElement).files![0],
     );

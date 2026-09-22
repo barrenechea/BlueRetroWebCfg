@@ -1,70 +1,71 @@
+import { useMutation } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import { useBlueRetro } from "../components/BlueRetroContext";
 import { ProgressBar } from "../components/ProgressBar";
 import { WikiIntro } from "../components/WikiIntro";
 import { downloadFile } from "../lib/blueretro/downloadFile";
+import { gattSerial } from "../lib/blueretro/gattSerial";
 import { makeFormattedPak } from "../lib/blueretro/makeFormattedPak";
 import { n64ReadFile } from "../lib/blueretro/n64ReadFile";
 import { n64WriteFile } from "../lib/blueretro/n64WriteFile";
 import { pakSize } from "../lib/constants";
 import { log } from "../lib/logger";
-import { resetProgress, setProgress, showProgressBar } from "../lib/progress";
+import { setProgress } from "../lib/progress";
 import type { CancelRef } from "../lib/types";
 
 export function N64CtrlPak() {
   const { connected, serviceRef } = useBlueRetro();
   const [pak, setPak] = useState(0);
-  const [transferring, setTransferring] = useState(false);
   // Real ref object so the recursive readers/writers' cancel check works
   // (the old code passed a plain number, which made Cancel a no-op).
   const cancelRef = useRef<CancelRef>({ current: 0 });
+
+  const pakReadMutation = useMutation({
+    mutationFn: () =>
+      gattSerial(() =>
+        n64ReadFile(serviceRef.current!, pak, setProgress, cancelRef.current),
+      ),
+    onSuccess: (value) => {
+      downloadFile(
+        new Blob([value.buffer as ArrayBuffer], { type: "application/mpk" }),
+        "ctrl_pak" + (pak + 1) + ".mpk",
+      );
+    },
+    onError: (error) => log("Argh! " + error),
+    onSettled: () => {
+      cancelRef.current.current = 0;
+    },
+  });
+
+  const pakWriteMutation = useMutation({
+    mutationFn: (data: ArrayBuffer) =>
+      gattSerial(() =>
+        n64WriteFile(
+          serviceRef.current!,
+          data,
+          pak,
+          setProgress,
+          cancelRef.current,
+        ),
+      ),
+    onError: (error) => log("Argh! " + error),
+    onSettled: () => {
+      cancelRef.current.current = 0;
+    },
+  });
+
+  const transferring = pakReadMutation.isPending || pakWriteMutation.isPending;
 
   function abortFileTransfer() {
     cancelRef.current.current = 1;
   }
 
-  async function writeFile(data: ArrayBuffer) {
-    showProgressBar();
-    setTransferring(true);
-    try {
-      await n64WriteFile(
-        serviceRef.current!,
-        data,
-        pak,
-        setProgress,
-        cancelRef.current,
-      );
-    } catch (error) {
-      log("Argh! " + error);
-      cancelRef.current.current = 0;
-    }
-    setTransferring(false);
-  }
-
   function pakRead() {
-    resetProgress();
-    n64ReadFile(serviceRef.current!, pak, setProgress, cancelRef.current)
-      .then((value) => {
-        downloadFile(
-          new Blob([value.buffer as ArrayBuffer], { type: "application/mpk" }),
-          "ctrl_pak" + (pak + 1) + ".mpk",
-        );
-        cancelRef.current.current = 0;
-      })
-      .catch((error) => {
-        log("Argh! " + error);
-        cancelRef.current.current = 0;
-      })
-      .finally(() => {
-        setTransferring(false);
-      });
-    showProgressBar();
-    setTransferring(true);
+    pakReadMutation.mutate();
   }
 
   function pakWrite() {
-    resetProgress();
     const reader = new FileReader();
     reader.onerror = () => {
       log("An error occurred reading this file.");
@@ -73,7 +74,7 @@ export function N64CtrlPak() {
       log("File read cancelled");
     };
     reader.onload = function () {
-      void writeFile((reader.result as ArrayBuffer).slice(0, pakSize));
+      pakWriteMutation.mutate((reader.result as ArrayBuffer).slice(0, pakSize));
     };
     reader.readAsArrayBuffer(
       (document.getElementById("pakFile") as HTMLInputElement).files![0],
@@ -81,7 +82,7 @@ export function N64CtrlPak() {
   }
 
   function pakFormat() {
-    void writeFile(makeFormattedPak().buffer);
+    pakWriteMutation.mutate(makeFormattedPak().buffer);
   }
 
   return (
@@ -130,7 +131,7 @@ export function N64CtrlPak() {
           (by{" "}
           <a href="https://github.com/bryc" target="_blank">
             bryc
-          </a>
+          </a>{" "}
           ) to manage content of .MPK files.
         </div>
       )}

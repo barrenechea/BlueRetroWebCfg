@@ -1,7 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useState,
   type ReactNode,
   type RefObject,
@@ -64,6 +66,15 @@ export function BlueRetroProvider({ children }: { children: ReactNode }) {
   const [gameid, setGameid] = useState("");
   const [gamename, setGamename] = useState<string | undefined>(undefined);
   const [currentCfg, setCurrentCfg] = useState(0);
+  const queryClient = useQueryClient();
+
+  // The device-read cache belongs to a connection: drop it when the link
+  // drops so the next connect refetches fresh data.
+  useEffect(() => {
+    if (!connected) {
+      queryClient.clear();
+    }
+  }, [connected, queryClient]);
 
   const connect = useCallback(async () => {
     if (!isWebBluetoothEnabled()) return;

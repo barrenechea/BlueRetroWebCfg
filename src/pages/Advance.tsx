@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { useBlueRetro } from "../components/BlueRetroContext";
 import { CfgSelection } from "../components/CfgSelection";
 import { WikiIntro } from "../components/WikiIntro";
+import { gattSerial } from "../lib/blueretro/gattSerial";
 import { getCfgSrc } from "../lib/blueretro/getCfgSrc";
 import { saveGlobalCfg } from "../lib/blueretro/saveGlobalCfg";
 import { saveOutputCfg } from "../lib/blueretro/saveOutputCfg";
@@ -97,7 +99,100 @@ const FIELDS: (keyof MappingRow)[] = [
   "diag",
 ];
 
+interface GlobalCfgData {
+  system: number;
+  multitap: number;
+  inquiry: number;
+  banksel: number;
+}
+
+interface OutputCfgData {
+  mode: number;
+  acc: number;
+}
+
+async function readGlobalCfg(
+  service: BluetoothRemoteGATTService,
+): Promise<GlobalCfgData> {
+  log("Get Global Config CHRC...");
+  const chrc = await service.getCharacteristic(brUuid[1]);
+  log("Reading Global Config...");
+  const value = await chrc.readValue();
+  log("Global Config size: " + value.byteLength);
+  return {
+    system: value.getUint8(0),
+    multitap: value.getUint8(1),
+    inquiry: value.getUint8(2),
+    banksel: value.getUint8(3),
+  };
+}
+
+async function readOutputCfg(
+  service: BluetoothRemoteGATTService,
+  cfgId: number,
+): Promise<OutputCfgData> {
+  log("Get Output " + cfgId + " CTRL CHRC...");
+  const chrc = await service.getCharacteristic(brUuid[2]);
+  log("Set Output " + cfgId + " on CTRL chrc...");
+  const outputCtrl = new Uint16Array(1);
+  outputCtrl[0] = Number(cfgId);
+  await chrc.writeValue(outputCtrl);
+  log("Get Output " + cfgId + " DATA CHRC...");
+  const dataChrc = await service.getCharacteristic(brUuid[3]);
+  log("Reading Output " + cfgId + " Config...");
+  const value = await dataChrc.readValue();
+  log("Output " + cfgId + " Config size: " + value.byteLength);
+  return { mode: value.getUint8(0), acc: value.getUint8(1) };
+}
+
+async function readInputCfg(
+  service: BluetoothRemoteGATTService,
+  cfgId: number,
+): Promise<MappingRow[]> {
+  const cfg = new Uint8Array(2051);
+  log("Get Input " + cfgId + " Config CHRC...");
+  const ctrl_chrc = await service.getCharacteristic(brUuid[4]);
+  const data_chrc = await service.getCharacteristic(brUuid[5]);
+  const inputCtrl = new Uint16Array(2);
+  inputCtrl[0] = Number(cfgId);
+  inputCtrl[1] = 0;
+  for (;;) {
+    log("Set Input Ctrl CHRC... " + inputCtrl[1]);
+    await ctrl_chrc.writeValue(inputCtrl);
+    log("Reading Input Data CHRC...");
+    const value = await data_chrc.readValue();
+    log("Got Input Data " + value.byteLength);
+    const tmp = new Uint8Array(value.buffer);
+    cfg.set(tmp, inputCtrl[1]);
+    log("Got Input Data " + cfg[2] + " " + value.getUint8(2));
+    if (value.byteLength == 512) {
+      inputCtrl[1] += Number(512);
+    } else {
+      break;
+    }
+  }
+  log("Input " + cfgId + " Config size: " + cfg.byteLength);
+  const nbMapping = cfg[2];
+  const rows: MappingRow[] = [];
+  let j = 3;
+  for (let i = 0; i < nbMapping; i++) {
+    rows.push({
+      src: cfg[j++],
+      dest: cfg[j++],
+      destId: cfg[j++],
+      max: cfg[j++],
+      thres: cfg[j++],
+      dz: cfg[j++],
+      turbo: cfg[j++],
+      scaling: cfg[j] & 0xf,
+      diag: cfg[j++] >> 4,
+    });
+  }
+  return rows;
+}
+
 export function Advance() {
+  const queryClient = useQueryClient();
   const {
     connected,
     serviceRef,
@@ -107,117 +202,164 @@ export function Advance() {
     setCurrentCfg,
   } = useBlueRetro();
 
+  // Global config
   const [system, setSystem] = useState(0);
   const [multitap, setMultitap] = useState(0);
   const [inquiry, setInquiry] = useState(0);
   const [banksel, setBanksel] = useState(0);
-  const [globalSaved, setGlobalSaved] = useState(false);
 
+  // Output config
   const [outputSelect, setOutputSelect] = useState(0);
   const [outputMode, setOutputMode] = useState(0);
   const [outputAcc, setOutputAcc] = useState(0);
-  const [outputSaved, setOutputSaved] = useState(false);
   const [outputMouse, setOutputMouse] = useState(false);
 
+  // Mapping config
   const [inputSelect, setInputSelect] = useState(0);
   const [srcLabel, setSrcLabel] = useState(0);
   const [dstLabel, setDstLabel] = useState(0);
   const [mappings, setMappings] = useState<MappingRow[]>([defaultRow()]);
-  const [inputSaved, setInputSaved] = useState(false);
 
-  const loadGlobalCfg = useCallback(async () => {
-    log("Get Global Config CHRC...");
-    const chrc = await serviceRef.current!.getCharacteristic(brUuid[1]);
-    log("Reading Global Config...");
-    const value = await chrc.readValue();
-    log("Global Config size: " + value.byteLength);
-    setSystem(value.getUint8(0));
-    setMultitap(value.getUint8(1));
-    if (apiVersion > 0) {
-      setInquiry(value.getUint8(2));
-    }
-    if (apiVersion > 1) {
-      setBanksel(value.getUint8(3));
-    }
-  }, [serviceRef, apiVersion]);
-
-  const loadOutputCfg = useCallback(
-    async (cfgId: number) => {
-      log("Get Output " + cfgId + " CTRL CHRC...");
-      const chrc = await serviceRef.current!.getCharacteristic(brUuid[2]);
-      log("Set Output " + cfgId + " on CTRL chrc...");
-      const outputCtrl = new Uint16Array(1);
-      outputCtrl[0] = Number(cfgId);
-      await chrc.writeValue(outputCtrl);
-      log("Get Output " + cfgId + " DATA CHRC...");
-      const dataChrc = await serviceRef.current!.getCharacteristic(brUuid[3]);
-      log("Reading Output " + cfgId + " Config...");
-      const value = await dataChrc.readValue();
-      log("Output " + cfgId + " Config size: " + value.byteLength);
-      setOutputMode(value.getUint8(0));
-      setOutputAcc(value.getUint8(1));
-    },
-    [serviceRef],
-  );
-
-  const loadInputCfg = useCallback(
-    async (cfgId: number) => {
-      const cfg = new Uint8Array(2051);
-      log("Get Input " + cfgId + " Config CHRC...");
-      const ctrl_chrc = await serviceRef.current!.getCharacteristic(brUuid[4]);
-      const data_chrc = await serviceRef.current!.getCharacteristic(brUuid[5]);
-      const inputCtrl = new Uint16Array(2);
-      inputCtrl[0] = Number(cfgId);
-      inputCtrl[1] = 0;
-      for (;;) {
-        log("Set Input Ctrl CHRC... " + inputCtrl[1]);
-        await ctrl_chrc.writeValue(inputCtrl);
-        log("Reading Input Data CHRC...");
-        const value = await data_chrc.readValue();
-        log("Got Input Data " + value.byteLength);
-        const tmp = new Uint8Array(value.buffer);
-        cfg.set(tmp, inputCtrl[1]);
-        log("Got Input Data " + cfg[2] + " " + value.getUint8(2));
-        if (value.byteLength == 512) {
-          inputCtrl[1] += Number(512);
-        } else {
-          break;
+  const globalQuery = useQuery({
+    queryKey: ["advance", "global"],
+    enabled: connected,
+    queryFn: () =>
+      gattSerial(async () => {
+        try {
+          return await readGlobalCfg(serviceRef.current!);
+        } catch (error) {
+          log("Argh! " + error);
+          throw error;
         }
+      }),
+  });
+
+  const outputQuery = useQuery({
+    queryKey: ["advance", "output", outputSelect],
+    enabled: connected,
+    queryFn: () =>
+      gattSerial(async () => {
+        try {
+          return await readOutputCfg(serviceRef.current!, outputSelect);
+        } catch (error) {
+          log("Argh! " + error);
+          throw error;
+        }
+      }),
+  });
+
+  const inputQuery = useQuery({
+    queryKey: ["advance", "input", inputSelect],
+    enabled: connected,
+    queryFn: () =>
+      gattSerial(async () => {
+        try {
+          return await readInputCfg(serviceRef.current!, inputSelect);
+        } catch (error) {
+          log("Argh! " + error);
+          throw error;
+        }
+      }),
+  });
+
+  // Re-seed the form drafts whenever a (cached) device read lands,
+  // including silent background refreshes. Storing the last-seeded data
+  // and adjusting state during render is React's documented pattern for
+  // derived state (no effect, no cascading renders).
+  const [seededGlobal, setSeededGlobal] = useState<GlobalCfgData>();
+  if (globalQuery.data !== seededGlobal) {
+    setSeededGlobal(globalQuery.data);
+    if (globalQuery.data) {
+      setSystem(globalQuery.data.system);
+      setMultitap(globalQuery.data.multitap);
+      if (apiVersion > 0) setInquiry(globalQuery.data.inquiry);
+      if (apiVersion > 1) setBanksel(globalQuery.data.banksel);
+    }
+  }
+
+  const [seededOutput, setSeededOutput] = useState<OutputCfgData>();
+  if (outputQuery.data !== seededOutput) {
+    setSeededOutput(outputQuery.data);
+    if (outputQuery.data) {
+      setOutputMode(outputQuery.data.mode);
+      setOutputAcc(outputQuery.data.acc);
+    }
+  }
+
+  const [seededInput, setSeededInput] = useState<MappingRow[]>();
+  if (inputQuery.data !== seededInput) {
+    setSeededInput(inputQuery.data);
+    if (inputQuery.data) {
+      setMappings(inputQuery.data);
+    }
+  }
+
+  const saveGlobalMutation = useMutation({
+    mutationFn: (data: Uint8Array<ArrayBuffer>) =>
+      gattSerial(() => saveGlobalCfg(serviceRef.current!, data)),
+    onSuccess: () => log("Global Config saved"),
+    onError: (error) => log("Argh! " + error),
+  });
+
+  const saveOutputMutation = useMutation({
+    mutationFn: ({
+      data,
+      cfgId,
+    }: {
+      data: Uint8Array<ArrayBuffer>;
+      cfgId: number;
+    }) =>
+      gattSerial(() => saveOutputCfg(serviceRef.current!, data, String(cfgId))),
+    onSuccess: (_, { data, cfgId }) => {
+      if (data[0] == 3) {
+        setOutputMouse(true);
       }
-      log("Input " + cfgId + " Config size: " + cfg.byteLength);
-      const nbMapping = cfg[2];
-      const rows: MappingRow[] = [];
-      let j = 3;
-      for (let i = 0; i < nbMapping; i++) {
-        rows.push({
-          src: cfg[j++],
-          dest: cfg[j++],
-          destId: cfg[j++],
-          max: cfg[j++],
-          thres: cfg[j++],
-          dz: cfg[j++],
-          turbo: cfg[j++],
-          scaling: cfg[j] & 0xf,
-          diag: cfg[j++] >> 4,
-        });
-      }
-      setMappings(rows);
+      log("Output " + cfgId + " Config saved");
     },
-    [serviceRef],
-  );
+    onError: (error) => log("Argh! " + error),
+  });
 
-  useEffect(() => {
-    if (!connected) return;
-    void (async () => {
-      log("Init Cfg DOM...");
-      await loadGlobalCfg();
-      await loadOutputCfg(0);
-      await loadInputCfg(0);
-    })();
-  }, [connected, currentCfg, loadGlobalCfg, loadOutputCfg, loadInputCfg]);
+  const saveInputMutation = useMutation({
+    mutationFn: ({
+      cfg,
+      cfgId,
+    }: {
+      cfg: Uint8Array<ArrayBuffer>;
+      cfgId: number;
+    }) => gattSerial(() => writeInputCfg(cfgId, cfg, serviceRef.current!)),
+    onSuccess: (_, { cfgId }) => log("Input " + cfgId + " Config saved"),
+    onError: (error) => log("Argh! " + error),
+  });
 
-  async function saveGlobal() {
-    setGlobalSaved(false);
+  const swGameIdMutation = useMutation({
+    mutationFn: () =>
+      gattSerial(async () => {
+        await setGameIdCfg(serviceRef.current!);
+        return getCfgSrc(serviceRef.current!);
+      }),
+    onSuccess: (cfg) => {
+      setCurrentCfg(cfg);
+      // The active config changed: refetch the cached reads.
+      void queryClient.invalidateQueries({ queryKey: ["advance"] });
+    },
+    onError: (error) => log("Argh! " + error),
+  });
+
+  const swDefaultMutation = useMutation({
+    mutationFn: () =>
+      gattSerial(async () => {
+        await setDefaultCfg(serviceRef.current!);
+        return getCfgSrc(serviceRef.current!);
+      }),
+    onSuccess: (cfg) => {
+      setCurrentCfg(cfg);
+      // The active config changed: refetch the cached reads.
+      void queryClient.invalidateQueries({ queryKey: ["advance"] });
+    },
+    onError: (error) => log("Argh! " + error),
+  });
+
+  function saveGlobal() {
     let data: Uint8Array<ArrayBuffer>;
     if (apiVersion > 1) {
       data = new Uint8Array(4);
@@ -234,39 +376,20 @@ export function Advance() {
     if (apiVersion > 1) {
       data[3] = banksel;
     }
-    try {
-      await saveGlobalCfg(serviceRef.current!, data);
-      setGlobalSaved(true);
-      log("Global Config saved");
-    } catch (error) {
-      log("Argh! " + error);
-    }
+    saveGlobalMutation.mutate(data);
   }
 
-  async function saveOutput() {
-    setOutputSaved(false);
+  function saveOutput() {
     setOutputMouse(false);
     const data = new Uint8Array(2);
     data[0] = outputMode;
     data[1] = outputAcc;
-    const cfgId = outputSelect;
-    try {
-      await saveOutputCfg(serviceRef.current!, data, String(cfgId));
-      setOutputSaved(true);
-      if (data[0] == 3) {
-        setOutputMouse(true);
-      }
-      log("Output " + cfgId + " Config saved");
-    } catch (error) {
-      log("Argh! " + error);
-    }
+    saveOutputMutation.mutate({ data, cfgId: outputSelect });
   }
 
-  async function saveInput() {
-    setInputSaved(false);
+  function saveInput() {
     const cfgSize = mappings.length * 8 + 3;
     const cfg = new Uint8Array(cfgSize);
-    const cfgId = inputSelect;
     let j = 0;
     cfg[j++] = 0;
     cfg[j++] = 0;
@@ -281,35 +404,15 @@ export function Advance() {
       cfg[j++] = row.turbo;
       cfg[j++] = Number(row.scaling) | (Number(row.diag) << 4);
     }
-    try {
-      await writeInputCfg(cfgId, cfg, serviceRef.current!);
-      setInputSaved(true);
-      log("Input " + cfgId + " Config saved");
-    } catch (error) {
-      log("Argh! " + error);
-    }
+    saveInputMutation.mutate({ cfg, cfgId: inputSelect });
   }
 
   function swGameIdCfg() {
-    void (async () => {
-      try {
-        await setGameIdCfg(serviceRef.current!);
-        setCurrentCfg(await getCfgSrc(serviceRef.current!));
-      } catch (error) {
-        log("Argh! " + error);
-      }
-    })();
+    swGameIdMutation.mutate();
   }
 
   function swDefaultCfg() {
-    void (async () => {
-      try {
-        await setDefaultCfg(serviceRef.current!);
-        setCurrentCfg(await getCfgSrc(serviceRef.current!));
-      } catch (error) {
-        log("Argh! " + error);
-      }
-    })();
+    swDefaultMutation.mutate();
   }
 
   function addInput() {
@@ -476,14 +579,14 @@ export function Advance() {
               </div>
             )}
             <div style={{ marginTop: "1em" }}>
-              <button id="globalSave" onClick={() => void saveGlobal()}>
+              <button id="globalSave" onClick={saveGlobal}>
                 Save
               </button>
             </div>
             <div
               id="globalSaveText"
               style={{
-                display: globalSaved ? "block" : "none",
+                display: saveGlobalMutation.isSuccess ? "block" : "none",
                 marginTop: "1em",
               }}
             >
@@ -512,11 +615,7 @@ export function Advance() {
               <select
                 id="outputSelect"
                 value={outputSelect}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setOutputSelect(v);
-                  void loadOutputCfg(v);
-                }}
+                onChange={(e) => setOutputSelect(Number(e.target.value))}
               >
                 {Array.from({ length: maxOutput }, (_, i) => (
                   <option key={i} value={i}>
@@ -560,14 +659,14 @@ export function Advance() {
               </span>
             </div>
             <div style={{ marginTop: "1em" }}>
-              <button id="outputSave" onClick={() => void saveOutput()}>
+              <button id="outputSave" onClick={saveOutput}>
                 Save
               </button>
             </div>
             <div
               id="outputSaveText"
               style={{
-                display: outputSaved ? "block" : "none",
+                display: saveOutputMutation.isSuccess ? "block" : "none",
                 marginTop: "1em",
               }}
             >
@@ -613,11 +712,7 @@ export function Advance() {
               <select
                 id="inputSelect"
                 value={inputSelect}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setInputSelect(v);
-                  void loadInputCfg(v);
-                }}
+                onChange={(e) => setInputSelect(Number(e.target.value))}
               >
                 {Array.from({ length: maxMainInput }, (_, i) => (
                   <option key={i} value={i}>
@@ -689,14 +784,14 @@ export function Advance() {
               ))}
               <button onClick={addInput}>+</button>
               <div style={{ marginTop: "1em" }}>
-                <button id="inputSave" onClick={() => void saveInput()}>
+                <button id="inputSave" onClick={saveInput}>
                   Save
                 </button>
               </div>
               <div
                 id="inputSaveText"
                 style={{
-                  display: inputSaved ? "block" : "none",
+                  display: saveInputMutation.isSuccess ? "block" : "none",
                   marginTop: "1em",
                 }}
               >

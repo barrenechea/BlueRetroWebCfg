@@ -7,14 +7,3 @@ export function setProgress(percent: number) {
     progress.textContent = percent + "%";
   }
 }
-
-export function resetProgress() {
-  setProgress(0);
-}
-
-export function showProgressBar() {
-  const bar = document.getElementById("progress_bar");
-  if (bar) {
-    bar.className = "loading";
-  }
-}

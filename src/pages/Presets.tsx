@@ -1,8 +1,10 @@
+import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { useBlueRetro } from "../components/BlueRetroContext";
 import { CfgSelection } from "../components/CfgSelection";
 import { WikiIntro } from "../components/WikiIntro";
+import { gattSerial } from "../lib/blueretro/gattSerial";
 import { getCfgSrc } from "../lib/blueretro/getCfgSrc";
 import { savePresetInput } from "../lib/blueretro/savePresetInput";
 import { setDefaultCfg } from "../lib/blueretro/setDefaultCfg";
@@ -10,6 +12,7 @@ import { setGameIdCfg } from "../lib/blueretro/setGameIdCfg";
 import { maxMainInput } from "../lib/constants";
 import { log } from "../lib/logger";
 import { presets, consoles } from "../lib/presets";
+import type { Preset } from "../lib/types";
 
 export function Presets() {
   const { connected, serviceRef, gameid, currentCfg, setCurrentCfg } =
@@ -18,28 +21,39 @@ export function Presets() {
   const [consoleSel, setConsoleSel] = useState(-1);
   const [presetSel, setPresetSel] = useState(-1);
   const [desc, setDesc] = useState("Select a system and then preset");
-  const [inputSaved, setInputSaved] = useState(false);
+
+  const swGameIdMutation = useMutation({
+    mutationFn: () =>
+      gattSerial(async () => {
+        await setGameIdCfg(serviceRef.current!);
+        return getCfgSrc(serviceRef.current!);
+      }),
+    onSuccess: (cfg) => setCurrentCfg(cfg),
+    onError: (error) => log("Argh! " + error),
+  });
+
+  const swDefaultMutation = useMutation({
+    mutationFn: () =>
+      gattSerial(async () => {
+        await setDefaultCfg(serviceRef.current!);
+        return getCfgSrc(serviceRef.current!);
+      }),
+    onSuccess: (cfg) => setCurrentCfg(cfg),
+    onError: (error) => log("Argh! " + error),
+  });
+
+  const savePresetMutation = useMutation({
+    mutationFn: ({ preset, cfgId }: { preset: Preset; cfgId: number }) =>
+      gattSerial(() => savePresetInput(preset, serviceRef.current!, cfgId)),
+    onError: (error) => log("Argh! " + error),
+  });
 
   function swGameIdCfg() {
-    void (async () => {
-      try {
-        await setGameIdCfg(serviceRef.current!);
-        setCurrentCfg(await getCfgSrc(serviceRef.current!));
-      } catch (error) {
-        log("Argh! " + error);
-      }
-    })();
+    swGameIdMutation.mutate();
   }
 
   function swDefaultCfg() {
-    void (async () => {
-      try {
-        await setDefaultCfg(serviceRef.current!);
-        setCurrentCfg(await getCfgSrc(serviceRef.current!));
-      } catch (error) {
-        log("Argh! " + error);
-      }
-    })();
+    swDefaultMutation.mutate();
   }
 
   function chooseConsole(value: number) {
@@ -53,16 +67,12 @@ export function Presets() {
     setDesc(value == -1 ? "Select a console and preset!" : presets[value].desc);
   }
 
-  async function saveInput() {
-    setInputSaved(false);
+  function saveInput() {
     if (presetSel != -1) {
-      const preset = presets[presetSel];
-      try {
-        await savePresetInput(preset, serviceRef.current!, Number(cfgId));
-        setInputSaved(true);
-      } catch (error) {
-        log("Argh! " + error);
-      }
+      savePresetMutation.mutate({
+        preset: presets[presetSel],
+        cfgId: Number(cfgId),
+      });
     }
   }
 
@@ -129,14 +139,14 @@ export function Presets() {
               ))}
             </select>
             <div style={{ marginTop: "1em" }}>
-              <button id="inputSave" onClick={() => void saveInput()}>
+              <button id="inputSave" onClick={saveInput}>
                 Save
               </button>
             </div>
             <div
               id="inputSaveText"
               style={{
-                display: inputSaved ? "block" : "none",
+                display: savePresetMutation.isSuccess ? "block" : "none",
                 marginTop: "1em",
               }}
             >

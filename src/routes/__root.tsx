@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   HeadContent,
   Link,
@@ -58,11 +59,25 @@ function RootDocument({ children }: { children: ReactNode }) {
   );
 }
 
+// Focus refetches are off: they would hammer the GATT link.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      gcTime: Infinity,
+      staleTime: 0,
+      retry: false,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
 function RootComponent() {
   return (
-    <BlueRetroProvider>
-      <RootShell />
-    </BlueRetroProvider>
+    <QueryClientProvider client={queryClient}>
+      <BlueRetroProvider>
+        <RootShell />
+      </BlueRetroProvider>
+    </QueryClientProvider>
   );
 }
 
