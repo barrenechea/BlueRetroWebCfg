@@ -1,3 +1,4 @@
+import { TanStackDevtools } from "@tanstack/react-devtools";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   HeadContent,
@@ -6,6 +7,7 @@ import {
   Scripts,
   createRootRoute,
 } from "@tanstack/react-router";
+import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import type { ReactNode } from "react";
 
 import {
@@ -15,8 +17,12 @@ import {
 import { ConnectButton } from "../components/ConnectButton";
 import { DivInfo } from "../components/DivInfo";
 import { OutputPanel } from "../components/OutputPanel";
+import { ThemeToggle } from "../components/ThemeToggle";
 import indexCss from "../index.css?url";
 import { ChromeSamples } from "../lib/logger";
+
+// Runs before hydration so the correct theme class is present on first paint.
+const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('blueretro:theme');var parsed=stored?JSON.parse(stored):'auto';var mode=(parsed==='light'||parsed==='dark'||parsed==='auto')?parsed:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');if(resolved==='dark'){root.classList.add('dark');}else{root.classList.add('light');}root.style.colorScheme=resolved;}catch(e){}})();`;
 
 const TABS = [
   { to: "/advance", label: "Advance" },
@@ -47,12 +53,22 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
       <body>
         {children}
+        <TanStackDevtools
+          config={{ position: "bottom-right" }}
+          plugins={[
+            {
+              name: "Tanstack Router",
+              render: <TanStackRouterDevtoolsPanel />,
+            },
+          ]}
+        />
         <Scripts />
       </body>
     </html>
@@ -93,7 +109,8 @@ function RootShell() {
         <a href="/">Index</a> |{" "}
         <a target="_blank" href="https://github.com/darthcloud/BlueRetro">
           View on GitHub
-        </a>
+        </a>{" "}
+        | <ThemeToggle />
       </p>
       <ConnectButton
         connected={connected}
