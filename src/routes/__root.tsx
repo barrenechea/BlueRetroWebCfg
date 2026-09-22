@@ -7,6 +7,13 @@ import {
 } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import {
+  BlueRetroProvider,
+  useBlueRetro,
+} from "../components/BlueRetroContext";
+import { ConnectButton } from "../components/ConnectButton";
+import { DivInfo } from "../components/DivInfo";
+import { OutputPanel } from "../components/OutputPanel";
 import indexCss from "../index.css?url";
 import { ChromeSamples } from "../lib/logger";
 
@@ -34,7 +41,7 @@ export const Route = createRootRoute({
     ],
   }),
   shellComponent: RootDocument,
-  component: RootShell,
+  component: RootComponent,
 });
 
 function RootDocument({ children }: { children: ReactNode }) {
@@ -51,9 +58,36 @@ function RootDocument({ children }: { children: ReactNode }) {
   );
 }
 
+function RootComponent() {
+  return (
+    <BlueRetroProvider>
+      <RootShell />
+    </BlueRetroProvider>
+  );
+}
+
 function RootShell() {
+  const { info, gamename, gameid, connected, connecting, connect, disconnect } =
+    useBlueRetro();
+
   return (
     <>
+      <img className="pageIcon" src="/icon.png" alt="" />
+      <h1>BlueRetro Web config</h1>
+      <p className="availability">
+        <a href="/">Index</a> |{" "}
+        <a target="_blank" href="https://github.com/darthcloud/BlueRetro">
+          View on GitHub
+        </a>
+      </p>
+      <ConnectButton
+        connected={connected}
+        connecting={connecting}
+        hint="Disconnect all controllers from BlueRetro before connecting."
+        onConnect={() => void connect()}
+        onDisconnect={disconnect}
+      />
+      {info && <DivInfo {...info} game={gamename} gameid={gameid} />}
       <nav className="tabs">
         {TABS.map((tab) => (
           <Link
@@ -67,6 +101,7 @@ function RootShell() {
         ))}
       </nav>
       <Outlet />
+      <OutputPanel />
     </>
   );
 }

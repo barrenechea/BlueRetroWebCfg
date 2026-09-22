@@ -1,91 +1,45 @@
 import { useState } from "react";
 
+import { useBlueRetro } from "../components/BlueRetroContext";
 import { CfgSelection } from "../components/CfgSelection";
-import { ConnectButton } from "../components/ConnectButton";
-import { DivInfo } from "../components/DivInfo";
-import { OutputPanel } from "../components/OutputPanel";
-import { PageLayout } from "../components/PageLayout";
 import { WikiIntro } from "../components/WikiIntro";
-import { getAppVersion } from "../lib/blueretro/getAppVersion";
-import { getBdAddr } from "../lib/blueretro/getBdAddr";
 import { getCfgSrc } from "../lib/blueretro/getCfgSrc";
-import { getGameId } from "../lib/blueretro/getGameId";
-import { getGameName } from "../lib/blueretro/getGameName";
-import { getLatestRelease } from "../lib/blueretro/getLatestRelease";
-import { isWebBluetoothEnabled } from "../lib/blueretro/isWebBluetoothEnabled";
 import { savePresetInput } from "../lib/blueretro/savePresetInput";
 import { setDefaultCfg } from "../lib/blueretro/setDefaultCfg";
 import { setGameIdCfg } from "../lib/blueretro/setGameIdCfg";
 import { maxMainInput } from "../lib/constants";
-import { ChromeSamples, log } from "../lib/logger";
+import { log } from "../lib/logger";
 import { presets, consoles } from "../lib/presets";
-import {
-  isNotFoundError,
-  useBlueRetroConnection,
-} from "../lib/useBlueRetroConnection";
 
 export function Presets() {
-  const { connected, setConnected, info, setInfo, serviceRef, connect } =
-    useBlueRetroConnection();
+  const { connected, serviceRef, gameid, currentCfg, setCurrentCfg } =
+    useBlueRetro();
   const [cfgId, setCfgId] = useState(0);
   const [consoleSel, setConsoleSel] = useState(-1);
   const [presetSel, setPresetSel] = useState(-1);
   const [desc, setDesc] = useState("Select a system and then preset");
-  const [gameid, setGameid] = useState("");
-  const [gamename, setGamename] = useState<string | undefined>(undefined);
-  const [currentCfg, setCurrentCfg] = useState(0);
   const [inputSaved, setInputSaved] = useState(false);
 
-  async function btConn() {
-    if (!isWebBluetoothEnabled()) return;
-    ChromeSamples.clearLog();
-    const conn = await connect();
-    if (!conn) return;
-    try {
-      const bdaddr = await getBdAddr(conn.service);
-      const latest_ver = await getLatestRelease();
-      const app_ver = await getAppVersion(conn.service);
-      const gid = await getGameId(conn.service);
-      const gn = await getGameName(gid);
-      let cfg_src: number;
-      try {
-        cfg_src = await getCfgSrc(conn.service);
-      } catch (error) {
-        if (isNotFoundError(error)) {
-          cfg_src = 0;
-        } else {
-          throw error;
-        }
-      }
-      setGameid(gid);
-      setGamename(gn);
-      setCurrentCfg(cfg_src);
-      setInfo({
-        name: conn.device.name ?? "",
-        bdaddr,
-        appVer: app_ver,
-        latestVer: latest_ver,
-      });
-      setConnected(true);
-    } catch (error) {
-      log("Argh! " + error);
-    }
-  }
-
   function swGameIdCfg() {
-    void setGameIdCfg(serviceRef.current!)
-      .then(() => getCfgSrc(serviceRef.current!))
-      .then((value) => {
-        setCurrentCfg(value);
-      });
+    void (async () => {
+      try {
+        await setGameIdCfg(serviceRef.current!);
+        setCurrentCfg(await getCfgSrc(serviceRef.current!));
+      } catch (error) {
+        log("Argh! " + error);
+      }
+    })();
   }
 
   function swDefaultCfg() {
-    void setDefaultCfg(serviceRef.current!)
-      .then(() => getCfgSrc(serviceRef.current!))
-      .then((value) => {
-        setCurrentCfg(value);
-      });
+    void (async () => {
+      try {
+        await setDefaultCfg(serviceRef.current!);
+        setCurrentCfg(await getCfgSrc(serviceRef.current!));
+      } catch (error) {
+        log("Argh! " + error);
+      }
+    })();
   }
 
   function chooseConsole(value: number) {
@@ -122,17 +76,12 @@ export function Presets() {
     );
 
   return (
-    <PageLayout title="BlueRetro Presets config">
+    <>
       <WikiIntro
         url="https://github.com/darthcloud/BlueRetro/wiki/BlueRetro-BLE-Web-Config-User-Manual#3---presets-page"
         label="3 - Presets page"
       />
 
-      <ConnectButton
-        hint="Disconnect all controllers from BlueRetro before connecting for configuration."
-        onClick={btConn}
-      />
-      {info && <DivInfo {...info} game={gamename} gameid={gameid} />}
       {connected && (
         <>
           <CfgSelection
@@ -180,7 +129,7 @@ export function Presets() {
               ))}
             </select>
             <div style={{ marginTop: "1em" }}>
-              <button id="inputSave" onClick={saveInput}>
+              <button id="inputSave" onClick={() => void saveInput()}>
                 Save
               </button>
             </div>
@@ -204,8 +153,6 @@ export function Presets() {
           </div>
         </>
       )}
-
-      <OutputPanel />
-    </PageLayout>
+    </>
   );
 }

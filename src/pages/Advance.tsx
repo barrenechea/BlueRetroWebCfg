@@ -1,18 +1,9 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { ConnectButton } from "../components/ConnectButton";
-import { DivInfo } from "../components/DivInfo";
-import { OutputPanel } from "../components/OutputPanel";
-import { PageLayout } from "../components/PageLayout";
+import { useBlueRetro } from "../components/BlueRetroContext";
+import { CfgSelection } from "../components/CfgSelection";
 import { WikiIntro } from "../components/WikiIntro";
-import { getApiVersion } from "../lib/blueretro/getApiVersion";
-import { getAppVersion } from "../lib/blueretro/getAppVersion";
-import { getBdAddr } from "../lib/blueretro/getBdAddr";
 import { getCfgSrc } from "../lib/blueretro/getCfgSrc";
-import { getGameId } from "../lib/blueretro/getGameId";
-import { getGameName } from "../lib/blueretro/getGameName";
-import { getLatestRelease } from "../lib/blueretro/getLatestRelease";
-import { isWebBluetoothEnabled } from "../lib/blueretro/isWebBluetoothEnabled";
 import { saveGlobalCfg } from "../lib/blueretro/saveGlobalCfg";
 import { saveOutputCfg } from "../lib/blueretro/saveOutputCfg";
 import { setDefaultCfg } from "../lib/blueretro/setDefaultCfg";
@@ -35,11 +26,7 @@ import {
   maxMax,
   maxThres,
 } from "../lib/constants";
-import { ChromeSamples, log } from "../lib/logger";
-import {
-  isNotFoundError,
-  useBlueRetroConnection,
-} from "../lib/useBlueRetroConnection";
+import { log } from "../lib/logger";
 
 const maxMapping = 255;
 
@@ -111,12 +98,14 @@ const FIELDS: (keyof MappingRow)[] = [
 ];
 
 export function Advance() {
-  const { connected, setConnected, info, setInfo, serviceRef, connect } =
-    useBlueRetroConnection();
-  const [apiVersion, setApiVersion] = useState(0);
-  const [gameid, setGameid] = useState("");
-  const [gamename, setGamename] = useState<string | undefined>(undefined);
-  const [currentCfg, setCurrentCfg] = useState(0);
+  const {
+    connected,
+    serviceRef,
+    apiVersion,
+    gameid,
+    currentCfg,
+    setCurrentCfg,
+  } = useBlueRetro();
 
   const [system, setSystem] = useState(0);
   const [multitap, setMultitap] = useState(0);
@@ -136,7 +125,7 @@ export function Advance() {
   const [mappings, setMappings] = useState<MappingRow[]>([defaultRow()]);
   const [inputSaved, setInputSaved] = useState(false);
 
-  async function loadGlobalCfg() {
+  const loadGlobalCfg = useCallback(async () => {
     log("Get Global Config CHRC...");
     const chrc = await serviceRef.current!.getCharacteristic(brUuid[1]);
     log("Reading Global Config...");
@@ -150,109 +139,82 @@ export function Advance() {
     if (apiVersion > 1) {
       setBanksel(value.getUint8(3));
     }
-  }
+  }, [serviceRef, apiVersion]);
 
-  async function loadOutputCfg(cfgId: number) {
-    log("Get Output " + cfgId + " CTRL CHRC...");
-    const chrc = await serviceRef.current!.getCharacteristic(brUuid[2]);
-    log("Set Output " + cfgId + " on CTRL chrc...");
-    const outputCtrl = new Uint16Array(1);
-    outputCtrl[0] = Number(cfgId);
-    await chrc.writeValue(outputCtrl);
-    log("Get Output " + cfgId + " DATA CHRC...");
-    const dataChrc = await serviceRef.current!.getCharacteristic(brUuid[3]);
-    log("Reading Output " + cfgId + " Config...");
-    const value = await dataChrc.readValue();
-    log("Output " + cfgId + " Config size: " + value.byteLength);
-    setOutputMode(value.getUint8(0));
-    setOutputAcc(value.getUint8(1));
-  }
+  const loadOutputCfg = useCallback(
+    async (cfgId: number) => {
+      log("Get Output " + cfgId + " CTRL CHRC...");
+      const chrc = await serviceRef.current!.getCharacteristic(brUuid[2]);
+      log("Set Output " + cfgId + " on CTRL chrc...");
+      const outputCtrl = new Uint16Array(1);
+      outputCtrl[0] = Number(cfgId);
+      await chrc.writeValue(outputCtrl);
+      log("Get Output " + cfgId + " DATA CHRC...");
+      const dataChrc = await serviceRef.current!.getCharacteristic(brUuid[3]);
+      log("Reading Output " + cfgId + " Config...");
+      const value = await dataChrc.readValue();
+      log("Output " + cfgId + " Config size: " + value.byteLength);
+      setOutputMode(value.getUint8(0));
+      setOutputAcc(value.getUint8(1));
+    },
+    [serviceRef],
+  );
 
-  async function loadInputCfg(cfgId: number) {
-    const cfg = new Uint8Array(2051);
-    log("Get Input " + cfgId + " Config CHRC...");
-    const ctrl_chrc = await serviceRef.current!.getCharacteristic(brUuid[4]);
-    const data_chrc = await serviceRef.current!.getCharacteristic(brUuid[5]);
-    const inputCtrl = new Uint16Array(2);
-    inputCtrl[0] = Number(cfgId);
-    inputCtrl[1] = 0;
-    for (;;) {
-      log("Set Input Ctrl CHRC... " + inputCtrl[1]);
-      await ctrl_chrc.writeValue(inputCtrl);
-      log("Reading Input Data CHRC...");
-      const value = await data_chrc.readValue();
-      log("Got Input Data " + value.byteLength);
-      const tmp = new Uint8Array(value.buffer);
-      cfg.set(tmp, inputCtrl[1]);
-      log("Got Input Data " + cfg[2] + " " + value.getUint8(2));
-      if (value.byteLength == 512) {
-        inputCtrl[1] += Number(512);
-      } else {
-        break;
-      }
-    }
-    log("Input " + cfgId + " Config size: " + cfg.byteLength);
-    const nbMapping = cfg[2];
-    const rows: MappingRow[] = [];
-    let j = 3;
-    for (let i = 0; i < nbMapping; i++) {
-      rows.push({
-        src: cfg[j++],
-        dest: cfg[j++],
-        destId: cfg[j++],
-        max: cfg[j++],
-        thres: cfg[j++],
-        dz: cfg[j++],
-        turbo: cfg[j++],
-        scaling: cfg[j] & 0xf,
-        diag: cfg[j++] >> 4,
-      });
-    }
-    setMappings(rows);
-  }
-
-  async function btConn() {
-    if (!isWebBluetoothEnabled()) return;
-    ChromeSamples.clearLog();
-    const conn = await connect();
-    if (!conn) return;
-    try {
-      const apiVer = await getApiVersion(conn.service);
-      setApiVersion(apiVer);
-      const bdaddr = await getBdAddr(conn.service);
-      const latest_ver = await getLatestRelease();
-      const app_ver = await getAppVersion(conn.service);
-      const gid = await getGameId(conn.service);
-      const gn = await getGameName(gid);
-      let cfg_src: number;
-      try {
-        cfg_src = await getCfgSrc(conn.service);
-      } catch (error) {
-        if (isNotFoundError(error)) {
-          cfg_src = 0;
+  const loadInputCfg = useCallback(
+    async (cfgId: number) => {
+      const cfg = new Uint8Array(2051);
+      log("Get Input " + cfgId + " Config CHRC...");
+      const ctrl_chrc = await serviceRef.current!.getCharacteristic(brUuid[4]);
+      const data_chrc = await serviceRef.current!.getCharacteristic(brUuid[5]);
+      const inputCtrl = new Uint16Array(2);
+      inputCtrl[0] = Number(cfgId);
+      inputCtrl[1] = 0;
+      for (;;) {
+        log("Set Input Ctrl CHRC... " + inputCtrl[1]);
+        await ctrl_chrc.writeValue(inputCtrl);
+        log("Reading Input Data CHRC...");
+        const value = await data_chrc.readValue();
+        log("Got Input Data " + value.byteLength);
+        const tmp = new Uint8Array(value.buffer);
+        cfg.set(tmp, inputCtrl[1]);
+        log("Got Input Data " + cfg[2] + " " + value.getUint8(2));
+        if (value.byteLength == 512) {
+          inputCtrl[1] += Number(512);
         } else {
-          throw error;
+          break;
         }
       }
-      setGameid(gid);
-      setGamename(gn);
-      setCurrentCfg(cfg_src);
-      log("ABI version: " + apiVer);
+      log("Input " + cfgId + " Config size: " + cfg.byteLength);
+      const nbMapping = cfg[2];
+      const rows: MappingRow[] = [];
+      let j = 3;
+      for (let i = 0; i < nbMapping; i++) {
+        rows.push({
+          src: cfg[j++],
+          dest: cfg[j++],
+          destId: cfg[j++],
+          max: cfg[j++],
+          thres: cfg[j++],
+          dz: cfg[j++],
+          turbo: cfg[j++],
+          scaling: cfg[j] & 0xf,
+          diag: cfg[j++] >> 4,
+        });
+      }
+      setMappings(rows);
+    },
+    [serviceRef],
+  );
+
+  useEffect(() => {
+    if (!connected) return;
+    void (async () => {
       log("Init Cfg DOM...");
       await loadGlobalCfg();
       await loadOutputCfg(0);
       await loadInputCfg(0);
-      setInfo({
-        name: conn.device.name ?? "",
-        bdaddr,
-        appVer: app_ver,
-        latestVer: latest_ver,
-      });
-      setConnected(true);
-    } catch (error) {
-      log("Argh! " + error);
-    }
-  }
+    })();
+  }, [connected, currentCfg, loadGlobalCfg, loadOutputCfg, loadInputCfg]);
 
   async function saveGlobal() {
     setGlobalSaved(false);
@@ -332,11 +294,7 @@ export function Advance() {
     void (async () => {
       try {
         await setGameIdCfg(serviceRef.current!);
-        const value = await getCfgSrc(serviceRef.current!);
-        setCurrentCfg(value);
-        await loadGlobalCfg();
-        await loadOutputCfg(0);
-        await loadInputCfg(0);
+        setCurrentCfg(await getCfgSrc(serviceRef.current!));
       } catch (error) {
         log("Argh! " + error);
       }
@@ -347,11 +305,7 @@ export function Advance() {
     void (async () => {
       try {
         await setDefaultCfg(serviceRef.current!);
-        const value = await getCfgSrc(serviceRef.current!);
-        setCurrentCfg(value);
-        await loadGlobalCfg();
-        await loadOutputCfg(0);
-        await loadInputCfg(0);
+        setCurrentCfg(await getCfgSrc(serviceRef.current!));
       } catch (error) {
         log("Argh! " + error);
       }
@@ -437,43 +391,21 @@ export function Advance() {
   }
 
   return (
-    <PageLayout title="BlueRetro Advance config">
+    <>
       <WikiIntro
         url={WIKI + "#2---advance-config-page"}
         label="2 - Advance config page"
       />
 
-      <ConnectButton
-        hint="Disconnect all controllers from BlueRetro before connecting for configuration."
-        onClick={btConn}
-      />
-      {info && <DivInfo {...info} game={gamename} gameid={gameid} />}
       {connected && (
         <>
-          <div id="divCfgSel" style={{ marginBottom: "1em" }}>
-            <h2 style={{ margin: 0 }}>Config Selection</h2>
-            <a href={WIKI + "#21---config-selection"} target="_blank">
-              Wiki doc for Config Selection
-            </a>
-            <br />
-            <br />
-            {currentCfg == 0
-              ? "Current config: Global"
-              : "Current config: GameID"}
-            <div style={{ marginTop: "1em" }}>
-              {currentCfg == 0 ? (
-                gameid.length > 0 && (
-                  <button id="cfgSw" onClick={swGameIdCfg}>
-                    Switch to GameID
-                  </button>
-                )
-              ) : (
-                <button id="cfgSw" onClick={swDefaultCfg}>
-                  Switch to Global
-                </button>
-              )}
-            </div>
-          </div>
+          <CfgSelection
+            currentCfg={currentCfg}
+            hasGameId={gameid.length > 0}
+            docUrl={WIKI + "#21---config-selection"}
+            onSwitchToGameId={swGameIdCfg}
+            onSwitchToGlobal={swDefaultCfg}
+          />
 
           <div id="divGlobalCfg" style={{ marginBottom: "1em" }}>
             <h2 style={{ margin: 0 }}>Global Config</h2>
@@ -544,7 +476,7 @@ export function Advance() {
               </div>
             )}
             <div style={{ marginTop: "1em" }}>
-              <button id="globalSave" onClick={saveGlobal}>
+              <button id="globalSave" onClick={() => void saveGlobal()}>
                 Save
               </button>
             </div>
@@ -628,7 +560,7 @@ export function Advance() {
               </span>
             </div>
             <div style={{ marginTop: "1em" }}>
-              <button id="outputSave" onClick={saveOutput}>
+              <button id="outputSave" onClick={() => void saveOutput()}>
                 Save
               </button>
             </div>
@@ -757,7 +689,7 @@ export function Advance() {
               ))}
               <button onClick={addInput}>+</button>
               <div style={{ marginTop: "1em" }}>
-                <button id="inputSave" onClick={saveInput}>
+                <button id="inputSave" onClick={() => void saveInput()}>
                   Save
                 </button>
               </div>
@@ -782,8 +714,6 @@ export function Advance() {
           </div>
         </>
       )}
-
-      <OutputPanel />
-    </PageLayout>
+    </>
   );
 }

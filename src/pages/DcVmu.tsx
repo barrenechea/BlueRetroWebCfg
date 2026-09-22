@@ -1,26 +1,15 @@
 import { useRef, useState } from "react";
 
-import { ConnectButton } from "../components/ConnectButton";
-import { DivInfo } from "../components/DivInfo";
-import { OutputPanel } from "../components/OutputPanel";
-import { PageLayout } from "../components/PageLayout";
+import { useBlueRetro } from "../components/BlueRetroContext";
 import { ProgressBar } from "../components/ProgressBar";
 import { WikiIntro } from "../components/WikiIntro";
 import { dcReadFile } from "../lib/blueretro/dcReadFile";
 import { dcWriteFile } from "../lib/blueretro/dcWriteFile";
 import { downloadFile } from "../lib/blueretro/downloadFile";
-import { getAppVersion } from "../lib/blueretro/getAppVersion";
-import { getBdAddr } from "../lib/blueretro/getBdAddr";
-import { getLatestRelease } from "../lib/blueretro/getLatestRelease";
-import { isWebBluetoothEnabled } from "../lib/blueretro/isWebBluetoothEnabled";
 import { vmuSize } from "../lib/constants";
-import { ChromeSamples, log } from "../lib/logger";
+import { log } from "../lib/logger";
 import { resetProgress, setProgress, showProgressBar } from "../lib/progress";
 import type { CancelRef } from "../lib/types";
-import {
-  isNotFoundError,
-  useBlueRetroConnection,
-} from "../lib/useBlueRetroConnection";
 
 function swapBytes(data: ArrayBuffer) {
   const view = new DataView(data);
@@ -30,8 +19,7 @@ function swapBytes(data: ArrayBuffer) {
 }
 
 export function DcVmu() {
-  const { connected, setConnected, info, setInfo, serviceRef, connect } =
-    useBlueRetroConnection();
+  const { connected, serviceRef } = useBlueRetro();
   const [transferring, setTransferring] = useState(false);
   // Real ref object so the recursive readers/writers' cancel check works
   // (the old code passed a plain number, which made Cancel a no-op).
@@ -39,37 +27,6 @@ export function DcVmu() {
 
   function abortFileTransfer() {
     cancelRef.current.current = 1;
-  }
-
-  async function btConn() {
-    if (!isWebBluetoothEnabled()) return;
-    ChromeSamples.clearLog();
-    const conn = await connect();
-    if (!conn) return;
-    try {
-      const bdaddr = await getBdAddr(conn.service);
-      const latest_ver = await getLatestRelease();
-      const app_ver = await getAppVersion(conn.service);
-      setInfo({
-        name: conn.device.name ?? "",
-        bdaddr,
-        appVer: app_ver,
-        latestVer: latest_ver,
-      });
-      setConnected(true);
-    } catch (error) {
-      if (isNotFoundError(error)) {
-        setInfo({
-          name: conn.device.name ?? "",
-          bdaddr: "",
-          appVer: "",
-          latestVer: "",
-        });
-        setConnected(true);
-      } else {
-        log("Argh! " + error);
-      }
-    }
   }
 
   function pakRead() {
@@ -126,17 +83,12 @@ export function DcVmu() {
   }
 
   return (
-    <PageLayout title="BlueRetro DC VMU manager">
+    <>
       <WikiIntro
         url="https://github.com/darthcloud/BlueRetro/wiki/BlueRetro-BLE-Web-Config-User-Manual#72---dc-vmu-manager-page"
         label="7.2 - DC VMU manager page"
       />
 
-      <ConnectButton
-        hint="Disconnect all controllers from BlueRetro before connecting for VMU management."
-        onClick={btConn}
-      />
-      {info && <DivInfo {...info} />}
       {connected && !transferring && (
         <div id="divFileSelect" style={{ marginBottom: "1em" }}>
           <button id="btnPakRead" onClick={pakRead}>
@@ -161,8 +113,6 @@ export function DcVmu() {
           </button>
         </div>
       )}
-
-      <OutputPanel />
-    </PageLayout>
+    </>
   );
 }

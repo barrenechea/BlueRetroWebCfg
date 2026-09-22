@@ -1,85 +1,44 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { ConnectButton } from "../components/ConnectButton";
-import { DivInfo } from "../components/DivInfo";
-import { OutputPanel } from "../components/OutputPanel";
-import { PageLayout } from "../components/PageLayout";
+import { useBlueRetro } from "../components/BlueRetroContext";
 import { ProgressBar } from "../components/ProgressBar";
 import { WikiIntro } from "../components/WikiIntro";
-import { getAppVersion } from "../lib/blueretro/getAppVersion";
-import { getBdAddr } from "../lib/blueretro/getBdAddr";
-import { getLatestRelease } from "../lib/blueretro/getLatestRelease";
 import { getStringCmd } from "../lib/blueretro/getStringCmd";
-import { isWebBluetoothEnabled } from "../lib/blueretro/isWebBluetoothEnabled";
 import { otaWriteFirmware } from "../lib/blueretro/otaWriteFirmware";
 import { cfg_cmd_get_fw_name } from "../lib/constants";
-import { ChromeSamples, log } from "../lib/logger";
+import { log } from "../lib/logger";
 import { resetProgress, setProgress, showProgressBar } from "../lib/progress";
 import type { CancelRef } from "../lib/types";
-import {
-  isNotFoundError,
-  useBlueRetroConnection,
-} from "../lib/useBlueRetroConnection";
 
 export function Ota() {
-  const { connected, setConnected, info, setInfo, serviceRef, connect } =
-    useBlueRetroConnection();
+  const { connected, info, serviceRef } = useBlueRetro();
   const [updating, setUpdating] = useState(false);
   const [fwIsHw2, setFwIsHw2] = useState(0);
   // Real ref object so the recursive writer's cancel check works (the old
   // code passed a plain number, which made Cancel a no-op).
   const cancelRef = useRef<CancelRef>({ current: 0 });
 
+  useEffect(() => {
+    if (!connected || !info) return;
+    void (async () => {
+      const appVer = info.appVer;
+      const appVerIs18x = appVer.indexOf("v1.8") != -1;
+      const appVerBogus = appVer.indexOf("v") == -1;
+      let appName = "";
+      if (!appVerIs18x && !appVerBogus) {
+        appName = await getStringCmd(serviceRef.current!, cfg_cmd_get_fw_name);
+      }
+      const appVerIsHw2 = appVer.indexOf("hw2") != -1;
+      const appNameIsHw2 = appName.indexOf("hw2") != -1;
+      log(
+        "app_ver_is_hw2: " + appVerIsHw2 + " app_name_is_hw2: " + appNameIsHw2,
+      );
+      setFwIsHw2(appVerIsHw2 || appNameIsHw2 ? 1 : 0);
+    })();
+  }, [connected, info, serviceRef]);
+
   function abortFwUpdate() {
     cancelRef.current.current = 1;
-  }
-
-  async function btConn() {
-    if (!isWebBluetoothEnabled()) return;
-    ChromeSamples.clearLog();
-    const conn = await connect();
-    if (!conn) return;
-    try {
-      const bdaddr = await getBdAddr(conn.service);
-      const latest_ver = await getLatestRelease();
-      const app_ver = await getAppVersion(conn.service);
-      const app_ver_is_18x = app_ver.indexOf("v1.8") != -1;
-      const app_ver_bogus = app_ver.indexOf("v") == -1;
-      let app_name = "";
-      if (app_ver_is_18x || app_ver_bogus) {
-        app_name = "";
-      } else {
-        app_name = await getStringCmd(conn.service, cfg_cmd_get_fw_name);
-      }
-      setInfo({
-        name: conn.device.name ?? "",
-        bdaddr,
-        appVer: app_ver,
-        latestVer: latest_ver,
-      });
-      const app_ver_is_hw2 = app_ver.indexOf("hw2") != -1;
-      const app_name_is_hw2 = app_name.indexOf("hw2") != -1;
-      log(
-        "app_ver_is_hw2: " +
-          app_ver_is_hw2 +
-          " app_name_is_hw2: " +
-          app_name_is_hw2,
-      );
-      setFwIsHw2(app_ver_is_hw2 || app_name_is_hw2 ? 1 : 0);
-      setConnected(true);
-    } catch (error) {
-      if (isNotFoundError(error)) {
-        setInfo({
-          name: conn.device.name ?? "",
-          bdaddr: "",
-          appVer: "",
-          latestVer: "",
-        });
-        setConnected(true);
-      } else {
-        log("Argh! " + error);
-      }
-    }
   }
 
   function firmwareUpdate() {
@@ -135,17 +94,12 @@ export function Ota() {
   }
 
   return (
-    <PageLayout title="BlueRetro OTA FW update">
+    <>
       <WikiIntro
         url="https://github.com/darthcloud/BlueRetro/wiki/BlueRetro-BLE-Web-Config-User-Manual#5---ota-fw-update-page"
         label="5 - OTA FW update page"
       />
 
-      <ConnectButton
-        hint="Disconnect all controllers from BlueRetro before connecting for update."
-        onClick={btConn}
-      />
-      {info && <DivInfo {...info} />}
       {connected && !updating && (
         <div id="divFwSelect" style={{ marginBottom: "1em" }}>
           Select firmware:
@@ -164,8 +118,6 @@ export function Ota() {
           </button>
         </div>
       )}
-
-      <OutputPanel />
-    </PageLayout>
+    </>
   );
 }

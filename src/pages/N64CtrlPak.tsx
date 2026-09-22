@@ -1,31 +1,19 @@
 import { useRef, useState } from "react";
 
-import { ConnectButton } from "../components/ConnectButton";
-import { DivInfo } from "../components/DivInfo";
-import { OutputPanel } from "../components/OutputPanel";
-import { PageLayout } from "../components/PageLayout";
+import { useBlueRetro } from "../components/BlueRetroContext";
 import { ProgressBar } from "../components/ProgressBar";
 import { WikiIntro } from "../components/WikiIntro";
 import { downloadFile } from "../lib/blueretro/downloadFile";
-import { getAppVersion } from "../lib/blueretro/getAppVersion";
-import { getBdAddr } from "../lib/blueretro/getBdAddr";
-import { getLatestRelease } from "../lib/blueretro/getLatestRelease";
-import { isWebBluetoothEnabled } from "../lib/blueretro/isWebBluetoothEnabled";
 import { makeFormattedPak } from "../lib/blueretro/makeFormattedPak";
 import { n64ReadFile } from "../lib/blueretro/n64ReadFile";
 import { n64WriteFile } from "../lib/blueretro/n64WriteFile";
 import { pakSize } from "../lib/constants";
-import { ChromeSamples, log } from "../lib/logger";
+import { log } from "../lib/logger";
 import { resetProgress, setProgress, showProgressBar } from "../lib/progress";
 import type { CancelRef } from "../lib/types";
-import {
-  isNotFoundError,
-  useBlueRetroConnection,
-} from "../lib/useBlueRetroConnection";
 
 export function N64CtrlPak() {
-  const { connected, setConnected, info, setInfo, serviceRef, connect } =
-    useBlueRetroConnection();
+  const { connected, serviceRef } = useBlueRetro();
   const [pak, setPak] = useState(0);
   const [transferring, setTransferring] = useState(false);
   // Real ref object so the recursive readers/writers' cancel check works
@@ -34,37 +22,6 @@ export function N64CtrlPak() {
 
   function abortFileTransfer() {
     cancelRef.current.current = 1;
-  }
-
-  async function btConn() {
-    if (!isWebBluetoothEnabled()) return;
-    ChromeSamples.clearLog();
-    const conn = await connect();
-    if (!conn) return;
-    try {
-      const bdaddr = await getBdAddr(conn.service);
-      const latest_ver = await getLatestRelease();
-      const app_ver = await getAppVersion(conn.service);
-      setInfo({
-        name: conn.device.name ?? "",
-        bdaddr,
-        appVer: app_ver,
-        latestVer: latest_ver,
-      });
-      setConnected(true);
-    } catch (error) {
-      if (isNotFoundError(error)) {
-        setInfo({
-          name: conn.device.name ?? "",
-          bdaddr: "",
-          appVer: "",
-          latestVer: "",
-        });
-        setConnected(true);
-      } else {
-        log("Argh! " + error);
-      }
-    }
   }
 
   async function writeFile(data: ArrayBuffer) {
@@ -128,17 +85,12 @@ export function N64CtrlPak() {
   }
 
   return (
-    <PageLayout title="BlueRetro N64 controller pak manager">
+    <>
       <WikiIntro
         url="https://github.com/darthcloud/BlueRetro/wiki/BlueRetro-BLE-Web-Config-User-Manual#71---n64-controller-pak-manager-page"
         label="7.1 - N64 controller pak manager page"
       />
 
-      <ConnectButton
-        hint="Disconnect all controllers from BlueRetro before connecting for pak management."
-        onClick={btConn}
-      />
-      {info && <DivInfo {...info} />}
       {connected && !transferring && (
         <div id="divFileSelect" style={{ marginBottom: "1em" }}>
           Select BlueRetro controller pak bank:
@@ -190,8 +142,6 @@ export function N64CtrlPak() {
           </button>
         </div>
       )}
-
-      <OutputPanel />
-    </PageLayout>
+    </>
   );
 }
