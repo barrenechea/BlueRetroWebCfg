@@ -1,10 +1,14 @@
 import { useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+
 import { useBlueRetro } from "../components/BlueRetroContext";
+import { NotConnected, PageHeader } from "../components/PageHeader";
 import { ProgressBar } from "../components/ProgressBar";
-import { WikiIntro } from "../components/WikiIntro";
 import { dcReadFile } from "../lib/blueretro/dcReadFile";
 import { downloadFile } from "../lib/blueretro/downloadFile";
+import { docs } from "../lib/docs";
 import { log } from "../lib/logger";
 import { setProgress } from "../lib/progress";
 import type { CancelRef } from "../lib/types";
@@ -40,27 +44,37 @@ export function Debug() {
   }
 
   return (
-    <>
-      <WikiIntro
-        url="https://github.com/darthcloud/BlueRetroWiki/blob/master/Debug-trace.md"
-        label="Debug Trace Documentation"
+    <div className="space-y-6">
+      <PageHeader
+        title="Debug Trace"
+        description="Download the adapter's trace buffer to attach to a bug report."
+        doc={docs.debugTrace}
       />
 
-      {connected && !transferring && (
-        <div id="divFileSelect" style={{ marginBottom: "1em" }}>
-          <button id="btnPakRead" onClick={() => void pakRead()}>
-            Download debug trace
-          </button>
-        </div>
+      {!connected && <NotConnected what="download a debug trace" />}
+
+      {connected && (
+        <Card>
+          {transferring ? (
+            <>
+              <CardContent>
+                <ProgressBar label="Downloading debug trace" />
+              </CardContent>
+              <CardFooter className="border-t">
+                <Button variant="outline" onClick={abortFileTransfer}>
+                  Cancel
+                </Button>
+              </CardFooter>
+            </>
+          ) : (
+            <CardFooter>
+              <Button onClick={() => void pakRead()}>
+                Download debug trace
+              </Button>
+            </CardFooter>
+          )}
+        </Card>
       )}
-      {connected && transferring && (
-        <div id="divFileTransfer" style={{ marginBottom: "1em" }}>
-          <ProgressBar />
-          <button id="btnFileTransferCancel" onClick={abortFileTransfer}>
-            Cancel
-          </button>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

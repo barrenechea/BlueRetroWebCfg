@@ -1,7 +1,23 @@
-export function ProgressBar() {
+import { useEffect } from "react";
+
+import {
+  Progress,
+  ProgressLabel,
+  ProgressValue,
+} from "@/components/ui/progress";
+
+import { setProgress, useProgress } from "../lib/progress";
+
+export function ProgressBar({ label = "Transferring" }: { label?: string }) {
+  const value = useProgress();
+
+  // Each transfer starts from zero, not from where the last one stopped.
+  useEffect(() => setProgress(0), []);
+
   return (
-    <div id="progress_bar" className="loading">
-      <div className="percent"></div>
-    </div>
+    <Progress value={value}>
+      <ProgressLabel>{label}</ProgressLabel>
+      <ProgressValue />
+    </Progress>
   );
 }

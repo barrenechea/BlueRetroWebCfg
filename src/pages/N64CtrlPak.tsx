@@ -1,15 +1,32 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
+
 import { useBlueRetro } from "../components/BlueRetroContext";
+import { NotConnected, PageHeader } from "../components/PageHeader";
 import { ProgressBar } from "../components/ProgressBar";
-import { WikiIntro } from "../components/WikiIntro";
 import { downloadFile } from "../lib/blueretro/downloadFile";
 import { gattSerial } from "../lib/blueretro/gattSerial";
 import { makeFormattedPak } from "../lib/blueretro/makeFormattedPak";
 import { n64ReadFile } from "../lib/blueretro/n64ReadFile";
 import { n64WriteFile } from "../lib/blueretro/n64WriteFile";
 import { pakSize } from "../lib/constants";
+import { docs, links } from "../lib/docs";
 import { log } from "../lib/logger";
 import { setProgress } from "../lib/progress";
 import type { CancelRef } from "../lib/types";
@@ -86,63 +103,97 @@ export function N64CtrlPak() {
   }
 
   return (
-    <>
-      <WikiIntro
-        url="https://github.com/darthcloud/BlueRetro/wiki/BlueRetro-BLE-Web-Config-User-Manual#71---n64-controller-pak-manager-page"
-        label="7.1 - N64 controller pak manager page"
+    <div className="space-y-6">
+      <PageHeader
+        title="N64 Controller Pak Manager"
+        description="Read, write and format BlueRetro's four emulated controller paks."
+        doc={docs.n64CtrlPak}
       />
 
-      {connected && !transferring && (
-        <div id="divFileSelect" style={{ marginBottom: "1em" }}>
-          Select BlueRetro controller pak bank:
-          <select
-            id="pakSelect"
-            value={pak}
-            onChange={(e) => setPak(Number(e.target.value))}
-          >
-            <option value="0">Pak 1</option>
-            <option value="1">Pak 2</option>
-            <option value="2">Pak 3</option>
-            <option value="3">Pak 4</option>
-          </select>
-          <br />
-          <br />
-          <button id="btnPakRead" onClick={pakRead}>
-            Read
-          </button>
-          <br />
-          <br />
-          <button id="btnPakFormat" onClick={pakFormat}>
-            Format
-          </button>
-          <br />
-          <br />
-          <button id="btnPakWrite" onClick={pakWrite}>
-            Write
-          </button>
-          Select .MPK file to write:
-          <input type="file" id="pakFile" />
-          <br />
-          <br />
-          Use{" "}
-          <a href="https://bryc.github.io/mempak" target="_blank">
-            https://bryc.github.io/mempak
-          </a>{" "}
-          (by{" "}
-          <a href="https://github.com/bryc" target="_blank">
-            bryc
-          </a>{" "}
-          ) to manage content of .MPK files.
-        </div>
-      )}
+      {!connected && <NotConnected what="manage the controller paks" />}
+
       {connected && transferring && (
-        <div id="divFileTransfer" style={{ marginBottom: "1em" }}>
-          <ProgressBar />
-          <button id="btnFileTransferCancel" onClick={abortFileTransfer}>
-            Cancel
-          </button>
-        </div>
+        <Card>
+          <CardContent>
+            <ProgressBar
+              label={pakReadMutation.isPending ? "Reading pak" : "Writing pak"}
+            />
+          </CardContent>
+          <CardFooter className="border-t">
+            <Button variant="outline" onClick={abortFileTransfer}>
+              Cancel
+            </Button>
+          </CardFooter>
+        </Card>
       )}
-    </>
+
+      {connected && !transferring && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Pak bank</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Field className="max-w-xs">
+                <FieldLabel htmlFor="pakSelect">
+                  Select BlueRetro controller pak bank
+                </FieldLabel>
+                <NativeSelect
+                  className="w-full"
+                  id="pakSelect"
+                  value={pak}
+                  onChange={(e) => setPak(Number(e.target.value))}
+                >
+                  {[0, 1, 2, 3].map((i) => (
+                    <NativeSelectOption key={i} value={i}>
+                      Pak {i + 1}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              </Field>
+            </CardContent>
+            <CardFooter className="gap-2 border-t">
+              <Button onClick={pakRead}>Read</Button>
+              <Button variant="outline" onClick={pakFormat}>
+                Format
+              </Button>
+            </CardFooter>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Select .MPK file to write</CardTitle>
+              <CardDescription>
+                Use{" "}
+                <a
+                  href={links.mempak}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  {links.mempak}
+                </a>{" "}
+                (by{" "}
+                <a
+                  href={links.mempakAuthor}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  bryc
+                </a>
+                ) to manage the content of .MPK files.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Input type="file" id="pakFile" accept=".mpk" />
+            </CardContent>
+            <CardFooter className="gap-2 border-t">
+              <Button onClick={pakWrite}>Write</Button>
+            </CardFooter>
+          </Card>
+        </>
+      )}
+    </div>
   );
 }

@@ -1,9 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CircleCheckIcon, InfoIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Label } from "@/components/ui/label";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 
 import { useBlueRetro } from "../components/BlueRetroContext";
 import { CfgSelection } from "../components/CfgSelection";
-import { WikiIntro } from "../components/WikiIntro";
+import { DocLink } from "../components/DocLink";
+import { NotConnected, PageHeader } from "../components/PageHeader";
 import { gattSerial } from "../lib/blueretro/gattSerial";
 import { getCfgSrc } from "../lib/blueretro/getCfgSrc";
 import { saveGlobalCfg } from "../lib/blueretro/saveGlobalCfg";
@@ -28,6 +48,7 @@ import {
   maxMax,
   maxThres,
 } from "../lib/constants";
+import { docs } from "../lib/docs";
 import { log } from "../lib/logger";
 
 const maxMapping = 255;
@@ -57,9 +78,6 @@ function defaultRow(): MappingRow {
     diag: 0,
   };
 }
-
-const WIKI =
-  "https://github.com/darthcloud/BlueRetro/wiki/BlueRetro-BLE-Web-Config-User-Manual";
 
 const FIELD_TITLES: Record<string, string> = {
   src: "This is the source button/axis on the Bluetooth controller",
@@ -98,6 +116,11 @@ const FIELDS: (keyof MappingRow)[] = [
   "scaling",
   "diag",
 ];
+
+// Shared by the header row and every data row so the columns line up. Below
+// `lg` the grid collapses and each cell shows its own label instead.
+const MAPPING_GRID =
+  "lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_2rem]";
 
 interface GlobalCfgData {
   system: number;
@@ -437,378 +460,427 @@ export function Advance() {
     switch (field) {
       case "src":
         return btnList.map((b, i) => (
-          <option key={i} value={i}>
+          <NativeSelectOption key={i} value={i}>
             {b[label]}
-          </option>
+          </NativeSelectOption>
         ));
       case "dest":
         return btnList.map((b, i) => (
-          <option key={i} value={i}>
+          <NativeSelectOption key={i} value={i}>
             {b[label]}
-          </option>
+          </NativeSelectOption>
         ));
       case "destId":
         return Array.from({ length: maxOutput }, (_, i) => (
-          <option key={i} value={i}>
+          <NativeSelectOption key={i} value={i}>
             Output {i + 1}
-          </option>
+          </NativeSelectOption>
         ));
       case "max":
       case "dz":
         return Array.from({ length: maxMax / 5 + 1 }, (_, k) => {
           const i = k * 5;
           return (
-            <option key={i} value={i}>
+            <NativeSelectOption key={i} value={i}>
               {field === "dz" ? i / 10000 + "%" : i + "%"}
-            </option>
+            </NativeSelectOption>
           );
         });
       case "thres":
         return Array.from({ length: maxThres / 5 + 1 }, (_, k) => {
           const i = k * 5;
           return (
-            <option key={i} value={i}>
+            <NativeSelectOption key={i} value={i}>
               {i + "%"}
-            </option>
+            </NativeSelectOption>
           );
         });
       case "turbo":
         return Object.keys(turboMask).map((key) => (
-          <option key={key} value={turboMask[key]}>
+          <NativeSelectOption key={key} value={turboMask[key]}>
             {key}
-          </option>
+          </NativeSelectOption>
         ));
       case "scaling":
         return scaling.map((s, i) => (
-          <option key={i} value={i}>
+          <NativeSelectOption key={i} value={i}>
             {s}
-          </option>
+          </NativeSelectOption>
         ));
       case "diag":
         return diagScaling.map((d, i) => (
-          <option key={i} value={i}>
+          <NativeSelectOption key={i} value={i}>
             {d}
-          </option>
+          </NativeSelectOption>
         ));
     }
   }
 
   return (
-    <>
-      <WikiIntro
-        url={WIKI + "#2---advance-config-page"}
-        label="2 - Advance config page"
+    <div className="space-y-6">
+      <PageHeader
+        title="Advance Config"
+        description="Global settings, per output behaviour and the full button mapping table."
+        doc={docs.advance}
       />
+
+      {!connected && <NotConnected what="edit the configuration" />}
 
       {connected && (
         <>
           <CfgSelection
             currentCfg={currentCfg}
             hasGameId={gameid.length > 0}
-            docUrl={WIKI + "#21---config-selection"}
+            doc={docs.cfgSelection}
             onSwitchToGameId={swGameIdCfg}
             onSwitchToGlobal={swDefaultCfg}
           />
 
-          <div id="divGlobalCfg" style={{ marginBottom: "1em" }}>
-            <h2 style={{ margin: 0 }}>Global Config</h2>
-            <a href={WIKI + "#22---global-config"} target="_blank">
-              Wiki doc for Global config
-            </a>
-            <br />
-            <br />
-            <div>
-              <label htmlFor="systemCfg">System: </label>
-              <select
-                id="systemCfg"
-                value={system}
-                onChange={(e) => setSystem(Number(e.target.value))}
-              >
-                {systemCfg.map((s, i) => (
-                  <option key={i} value={i}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="multitapCfg">Multitap: </label>
-              <select
-                id="multitapCfg"
-                value={multitap}
-                onChange={(e) => setMultitap(Number(e.target.value))}
-              >
-                {multitapCfg.map((s, i) => (
-                  <option key={i} value={i}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {apiVersion > 0 && (
-              <div>
-                <label htmlFor="inquiryMode">Inquiry mode: </label>
-                <select
-                  id="inquiryMode"
-                  value={inquiry}
-                  onChange={(e) => setInquiry(Number(e.target.value))}
-                >
-                  {inquiryMode.map((s, i) => (
-                    <option key={i} value={i}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {apiVersion > 1 && (
-              <div>
-                <label htmlFor="banksel">Memory Card Bank: </label>
-                <select
-                  id="banksel"
-                  value={banksel}
-                  onChange={(e) => setBanksel(Number(e.target.value))}
-                >
-                  {[0, 1, 2, 3].map((i) => (
-                    <option key={i} value={i}>
-                      Bank {i + 1}
-                    </option>
-                  ))}
-                  <option value={0xdb}>Debug mode</option>
-                </select>
-              </div>
-            )}
-            <div style={{ marginTop: "1em" }}>
-              <button id="globalSave" onClick={saveGlobal}>
-                Save
-              </button>
-            </div>
-            <div
-              id="globalSaveText"
-              style={{
-                display: saveGlobalMutation.isSuccess ? "block" : "none",
-                marginTop: "1em",
-              }}
-            >
-              <p
-                style={{
-                  fontStyle: "italic",
-                  fontSize: "small",
-                  color: "red",
-                }}
-              >
-                Config saved, power cycle BlueRetro adapter for change to take
-                effect.
-              </p>
-            </div>
-          </div>
-
-          <div id="divOutputCfg" style={{ marginBottom: "1em" }}>
-            <h2 style={{ margin: 0 }}>Output Config</h2>
-            <a href={WIKI + "#23---output-config"} target="_blank">
-              Wiki doc for Output config
-            </a>
-            <br />
-            <br />
-            <div>
-              <label htmlFor="outputSelect">Select output: </label>
-              <select
-                id="outputSelect"
-                value={outputSelect}
-                onChange={(e) => setOutputSelect(Number(e.target.value))}
-              >
-                {Array.from({ length: maxOutput }, (_, i) => (
-                  <option key={i} value={i}>
-                    Output {i + 1}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ marginTop: "1em" }}>
-              <span style={{ display: "inline-block" }}>
-                <label htmlFor="outputMode" style={{ display: "block" }}>
-                  Mode
-                </label>
-                <select
-                  id="outputMode"
-                  value={outputMode}
-                  onChange={(e) => setOutputMode(Number(e.target.value))}
-                >
-                  {devCfg.map((s, i) => (
-                    <option key={i} value={i}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </span>
-              <span style={{ display: "inline-block" }}>
-                <label htmlFor="outputAcc" style={{ display: "block" }}>
-                  Accessories
-                </label>
-                <select
-                  id="outputAcc"
-                  value={outputAcc}
-                  onChange={(e) => setOutputAcc(Number(e.target.value))}
-                >
-                  {accCfg.map((s, i) => (
-                    <option key={i} value={i}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </span>
-            </div>
-            <div style={{ marginTop: "1em" }}>
-              <button id="outputSave" onClick={saveOutput}>
-                Save
-              </button>
-            </div>
-            <div
-              id="outputSaveText"
-              style={{
-                display: saveOutputMutation.isSuccess ? "block" : "none",
-                marginTop: "1em",
-              }}
-            >
-              <p
-                style={{
-                  fontStyle: "italic",
-                  fontSize: "small",
-                  color: "red",
-                }}
-              >
-                Config saved, power cycle BlueRetro adapter for Mode change to
-                take effect.
-              </p>
-            </div>
-            <div
-              id="outputSaveMouse"
-              style={{
-                display: outputMouse ? "block" : "none",
-                marginTop: "1em",
-              }}
-            >
-              <p
-                style={{
-                  fontStyle: "italic",
-                  fontSize: "small",
-                  color: "orange",
-                }}
-              >
-                Mouse mode require setting &lt;Default Mouse&gt; preset.
-              </p>
-            </div>
-          </div>
-
-          <div id="divInputCfg" style={{ marginBottom: "1em" }}>
-            <h2 style={{ margin: 0 }}>Mapping Config</h2>
-            <a href={WIKI + "#24---mapping-config"} target="_blank">
-              Wiki doc for Mapping config
-            </a>
-            <br />
-            <br />
-            <div style={{ marginBottom: "1em" }}>
-              <label htmlFor="inputSelect">Select Bluetooth device: </label>
-              <select
-                id="inputSelect"
-                value={inputSelect}
-                onChange={(e) => setInputSelect(Number(e.target.value))}
-              >
-                {Array.from({ length: maxMainInput }, (_, i) => (
-                  <option key={i} value={i}>
-                    Device {i + 1}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="srcLabel">Src label: </label>
-              <select
-                id="srcLabel"
-                value={srcLabel}
-                onChange={(e) => setSrcLabel(Number(e.target.value))}
-              >
-                {labelName.map((s, i) => (
-                  <option key={i} value={i}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ marginBottom: "1em" }}>
-              <label htmlFor="dstLabel">Dst label: </label>
-              <select
-                id="dstLabel"
-                value={dstLabel}
-                onChange={(e) => setDstLabel(Number(e.target.value))}
-              >
-                {labelName.map((s, i) => (
-                  <option key={i} value={i}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div id="divMappingGrp">
-              {mappings.map((row, i) => (
-                <div key={i} id={i === 0 ? "divMapping" : undefined}>
-                  {FIELDS.map((field) => (
-                    <span
-                      key={field}
-                      title={FIELD_TITLES[field]}
-                      style={{
-                        maxWidth: "10%",
-                        display: "inline-block",
-                      }}
+          <Card>
+            <CardHeader>
+              <CardTitle>Global Config</CardTitle>
+              <CardDescription>Applies to the whole adapter.</CardDescription>
+              <CardAction>
+                <DocLink href={docs.globalCfg.href}>
+                  {docs.globalCfg.label}
+                </DocLink>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="gap-6">
+              <FieldGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Field>
+                  <FieldLabel htmlFor="systemCfg">System</FieldLabel>
+                  <NativeSelect
+                    className="w-full"
+                    id="systemCfg"
+                    value={system}
+                    onChange={(e) => setSystem(Number(e.target.value))}
+                  >
+                    {systemCfg.map((s, i) => (
+                      <NativeSelectOption key={i} value={i}>
+                        {s}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="multitapCfg">Multitap</FieldLabel>
+                  <NativeSelect
+                    className="w-full"
+                    id="multitapCfg"
+                    value={multitap}
+                    onChange={(e) => setMultitap(Number(e.target.value))}
+                  >
+                    {multitapCfg.map((s, i) => (
+                      <NativeSelectOption key={i} value={i}>
+                        {s}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                {apiVersion > 0 && (
+                  <Field>
+                    <FieldLabel htmlFor="inquiryMode">Inquiry mode</FieldLabel>
+                    <NativeSelect
+                      className="w-full"
+                      id="inquiryMode"
+                      value={inquiry}
+                      onChange={(e) => setInquiry(Number(e.target.value))}
                     >
-                      <label style={{ display: "block" }}>
-                        {FIELD_LABELS[field]}
-                      </label>
-                      <select
-                        className={field}
-                        value={row[field]}
-                        onChange={(e) =>
-                          updateRow(i, field, Number(e.target.value))
-                        }
+                      {inquiryMode.map((s, i) => (
+                        <NativeSelectOption key={i} value={i}>
+                          {s}
+                        </NativeSelectOption>
+                      ))}
+                    </NativeSelect>
+                  </Field>
+                )}
+                {apiVersion > 1 && (
+                  <Field>
+                    <FieldLabel htmlFor="banksel">Memory Card Bank</FieldLabel>
+                    <NativeSelect
+                      className="w-full"
+                      id="banksel"
+                      value={banksel}
+                      onChange={(e) => setBanksel(Number(e.target.value))}
+                    >
+                      {[0, 1, 2, 3].map((i) => (
+                        <NativeSelectOption key={i} value={i}>
+                          Bank {i + 1}
+                        </NativeSelectOption>
+                      ))}
+                      <NativeSelectOption value={0xdb}>
+                        Debug mode
+                      </NativeSelectOption>
+                    </NativeSelect>
+                  </Field>
+                )}
+              </FieldGroup>
+
+              {saveGlobalMutation.isSuccess && (
+                <Alert>
+                  <CircleCheckIcon />
+                  <AlertTitle>Config saved</AlertTitle>
+                  <AlertDescription>
+                    Power cycle the BlueRetro adapter for the change to take
+                    effect.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+            <CardFooter className="border-t">
+              <Button onClick={saveGlobal}>Save</Button>
+            </CardFooter>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Output Config</CardTitle>
+              <CardDescription>
+                Device mode and accessories for one wired output.
+              </CardDescription>
+              <CardAction>
+                <DocLink href={docs.outputCfg.href}>
+                  {docs.outputCfg.label}
+                </DocLink>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="gap-6">
+              <FieldGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Field>
+                  <FieldLabel htmlFor="outputSelect">Select output</FieldLabel>
+                  <NativeSelect
+                    className="w-full"
+                    id="outputSelect"
+                    value={outputSelect}
+                    onChange={(e) => setOutputSelect(Number(e.target.value))}
+                  >
+                    {Array.from({ length: maxOutput }, (_, i) => (
+                      <NativeSelectOption key={i} value={i}>
+                        Output {i + 1}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="outputMode">Mode</FieldLabel>
+                  <NativeSelect
+                    className="w-full"
+                    id="outputMode"
+                    value={outputMode}
+                    onChange={(e) => setOutputMode(Number(e.target.value))}
+                  >
+                    {devCfg.map((s, i) => (
+                      <NativeSelectOption key={i} value={i}>
+                        {s}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="outputAcc">Accessories</FieldLabel>
+                  <NativeSelect
+                    className="w-full"
+                    id="outputAcc"
+                    value={outputAcc}
+                    onChange={(e) => setOutputAcc(Number(e.target.value))}
+                  >
+                    {accCfg.map((s, i) => (
+                      <NativeSelectOption key={i} value={i}>
+                        {s}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+              </FieldGroup>
+
+              {saveOutputMutation.isSuccess && (
+                <Alert>
+                  <CircleCheckIcon />
+                  <AlertTitle>Config saved</AlertTitle>
+                  <AlertDescription>
+                    Power cycle the BlueRetro adapter for the Mode change to
+                    take effect.
+                  </AlertDescription>
+                </Alert>
+              )}
+              {outputMouse && (
+                <Alert>
+                  <InfoIcon />
+                  <AlertTitle>
+                    Mouse mode requires the &lt;Default Mouse&gt; preset.
+                  </AlertTitle>
+                </Alert>
+              )}
+            </CardContent>
+            <CardFooter className="border-t">
+              <Button onClick={saveOutput}>Save</Button>
+            </CardFooter>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Mapping Config</CardTitle>
+              <CardDescription>
+                Route each button or axis on the Bluetooth controller to one on
+                the wired interface.
+              </CardDescription>
+              <CardAction>
+                <DocLink href={docs.mappingCfg.href}>
+                  {docs.mappingCfg.label}
+                </DocLink>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="gap-6">
+              <FieldGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Field>
+                  <FieldLabel htmlFor="inputSelect">
+                    Select Bluetooth device
+                  </FieldLabel>
+                  <NativeSelect
+                    className="w-full"
+                    id="inputSelect"
+                    value={inputSelect}
+                    onChange={(e) => setInputSelect(Number(e.target.value))}
+                  >
+                    {Array.from({ length: maxMainInput }, (_, i) => (
+                      <NativeSelectOption key={i} value={i}>
+                        Device {i + 1}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="srcLabel">Src label</FieldLabel>
+                  <NativeSelect
+                    className="w-full"
+                    id="srcLabel"
+                    value={srcLabel}
+                    onChange={(e) => setSrcLabel(Number(e.target.value))}
+                  >
+                    {labelName.map((s, i) => (
+                      <NativeSelectOption key={i} value={i}>
+                        {s}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="dstLabel">Dst label</FieldLabel>
+                  <NativeSelect
+                    className="w-full"
+                    id="dstLabel"
+                    value={dstLabel}
+                    onChange={(e) => setDstLabel(Number(e.target.value))}
+                  >
+                    {labelName.map((s, i) => (
+                      <NativeSelectOption key={i} value={i}>
+                        {s}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+              </FieldGroup>
+
+              <div className="lg:overflow-x-auto">
+                <div className="lg:min-w-[60rem]">
+                  {/* Column headers stand in for the per-cell labels once
+                      the rows line up as a table. */}
+                  <div
+                    className={`text-muted-foreground hidden gap-2 pb-2 text-xs font-medium lg:grid ${MAPPING_GRID}`}
+                  >
+                    {FIELDS.map((field) => (
+                      <span
+                        key={field}
+                        title={FIELD_TITLES[field]}
+                        className="cursor-help truncate"
                       >
-                        {renderOptions(
-                          field,
-                          field === "src" ? srcLabel : dstLabel,
-                        )}
-                      </select>
-                    </span>
-                  ))}
-                  {i > 0 && <button onClick={() => delInput(i)}>-</button>}
+                        {FIELD_LABELS[field]}
+                      </span>
+                    ))}
+                    <span className="sr-only">Remove</span>
+                  </div>
+
+                  <div className="space-y-3 lg:space-y-0 lg:divide-y lg:border-y">
+                    {mappings.map((row, i) => (
+                      <div
+                        key={i}
+                        className={`grid grid-cols-2 gap-3 rounded-lg border p-3 sm:grid-cols-3 lg:items-center lg:gap-2 lg:rounded-none lg:border-0 lg:p-0 lg:py-2 ${MAPPING_GRID}`}
+                      >
+                        {FIELDS.map((field) => (
+                          <div key={field} className="min-w-0">
+                            <Label
+                              htmlFor={`mapping-${i}-${field}`}
+                              title={FIELD_TITLES[field]}
+                              className="mb-2 lg:sr-only"
+                            >
+                              {FIELD_LABELS[field]}
+                            </Label>
+                            <NativeSelect
+                              id={`mapping-${i}-${field}`}
+                              size="sm"
+                              className="w-full"
+                              value={row[field]}
+                              onChange={(e) =>
+                                updateRow(i, field, Number(e.target.value))
+                              }
+                            >
+                              {renderOptions(
+                                field,
+                                field === "src" ? srcLabel : dstLabel,
+                              )}
+                            </NativeSelect>
+                          </div>
+                        ))}
+                        <div className="flex items-end justify-end lg:items-center">
+                          {i > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`Remove mapping ${i + 1}`}
+                              title="Remove mapping"
+                              onClick={() => delInput(i)}
+                            >
+                              <Trash2Icon />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-              <button onClick={addInput}>+</button>
-              <div style={{ marginTop: "1em" }}>
-                <button id="inputSave" onClick={saveInput}>
-                  Save
-                </button>
               </div>
-              <div
-                id="inputSaveText"
-                style={{
-                  display: saveInputMutation.isSuccess ? "block" : "none",
-                  marginTop: "1em",
-                }}
-              >
-                <p
-                  style={{
-                    fontStyle: "italic",
-                    fontSize: "small",
-                    color: "green",
-                  }}
+
+              <div className="flex items-center justify-between gap-3">
+                <Button
+                  variant="outline"
+                  onClick={addInput}
+                  disabled={mappings.length >= maxMapping}
                 >
-                  Config saved, mapping changes take effect immediately.
-                </p>
+                  <PlusIcon data-icon="inline-start" />
+                  Add mapping
+                </Button>
+                <span className="text-muted-foreground text-xs tabular-nums">
+                  {mappings.length} / {maxMapping}
+                </span>
               </div>
-            </div>
-          </div>
+
+              {saveInputMutation.isSuccess && (
+                <Alert>
+                  <CircleCheckIcon />
+                  <AlertTitle>Config saved</AlertTitle>
+                  <AlertDescription>
+                    Mapping changes take effect immediately.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+            <CardFooter className="border-t">
+              <Button onClick={saveInput}>Save</Button>
+            </CardFooter>
+          </Card>
         </>
       )}
-    </>
+    </div>
   );
 }

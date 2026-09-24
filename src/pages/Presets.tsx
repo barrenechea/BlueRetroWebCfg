@@ -1,15 +1,38 @@
 import { useMutation } from "@tanstack/react-query";
+import { CircleCheckIcon } from "lucide-react";
 import { useState } from "react";
+
+import { Alert, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "@/components/ui/item";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 
 import { useBlueRetro } from "../components/BlueRetroContext";
 import { CfgSelection } from "../components/CfgSelection";
-import { WikiIntro } from "../components/WikiIntro";
+import { NotConnected, PageHeader } from "../components/PageHeader";
 import { gattSerial } from "../lib/blueretro/gattSerial";
 import { getCfgSrc } from "../lib/blueretro/getCfgSrc";
 import { savePresetInput } from "../lib/blueretro/savePresetInput";
 import { setDefaultCfg } from "../lib/blueretro/setDefaultCfg";
 import { setGameIdCfg } from "../lib/blueretro/setGameIdCfg";
 import { maxMainInput } from "../lib/constants";
+import { docs } from "../lib/docs";
 import { log } from "../lib/logger";
 import { presets, consoles } from "../lib/presets";
 import type { Preset } from "../lib/types";
@@ -20,7 +43,6 @@ export function Presets() {
   const [cfgId, setCfgId] = useState(0);
   const [consoleSel, setConsoleSel] = useState(-1);
   const [presetSel, setPresetSel] = useState(-1);
-  const [desc, setDesc] = useState("Select a system and then preset");
 
   const swGameIdMutation = useMutation({
     mutationFn: () =>
@@ -59,12 +81,6 @@ export function Presets() {
   function chooseConsole(value: number) {
     setConsoleSel(value);
     setPresetSel(-1);
-    setDesc("Select a console and preset!");
-  }
-
-  function choosePreset(value: number) {
-    setPresetSel(value);
-    setDesc(value == -1 ? "Select a console and preset!" : presets[value].desc);
   }
 
   function saveInput() {
@@ -85,12 +101,17 @@ export function Presets() {
         consoleSel == -1 || preset.console === consoles[consoleSel],
     );
 
+  const selected = presetSel === -1 ? undefined : presets[presetSel];
+
   return (
-    <>
-      <WikiIntro
-        url="https://github.com/darthcloud/BlueRetro/wiki/BlueRetro-BLE-Web-Config-User-Manual#3---presets-page"
-        label="3 - Presets page"
+    <div className="space-y-6">
+      <PageHeader
+        title="Presets"
+        description="Load a ready made mapping onto one of BlueRetro's outputs."
+        doc={docs.presets}
       />
+
+      {!connected && <NotConnected what="load a preset" />}
 
       {connected && (
         <>
@@ -100,69 +121,98 @@ export function Presets() {
             onSwitchToGameId={swGameIdCfg}
             onSwitchToGlobal={swDefaultCfg}
           />
-          <div id="divInputCfg" style={{ marginBottom: "1em" }}>
-            <h2 style={{ margin: 0 }}>Mapping Config</h2>
-            <p id="desc">{desc}</p>
-            <select
-              id="inputSelect"
-              value={cfgId}
-              onChange={(e) => setCfgId(Number(e.target.value))}
-            >
-              {Array.from({ length: maxMainInput }, (_, i) => (
-                <option key={i} value={i}>
-                  Output {i + 1}
-                </option>
-              ))}
-            </select>
-            <select
-              id="consoleName"
-              value={consoleSel}
-              onChange={(e) => chooseConsole(Number(e.target.value))}
-            >
-              <option value={-1}>All</option>
-              {consoles.map((c, i) => (
-                <option key={i} value={i}>
-                  {c}
-                </option>
-              ))}
-            </select>
-            <select
-              id="presetsName"
-              value={presetSel}
-              onChange={(e) => choosePreset(Number(e.target.value))}
-            >
-              <option value={-1}>Select preset</option>
-              {visiblePresets.map(({ preset, index }) => (
-                <option key={index} value={index}>
-                  {preset.name}
-                </option>
-              ))}
-            </select>
-            <div style={{ marginTop: "1em" }}>
-              <button id="inputSave" onClick={saveInput}>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Mapping Config</CardTitle>
+            </CardHeader>
+            <CardContent className="gap-6">
+              <FieldGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Field>
+                  <FieldLabel htmlFor="inputSelect">Output</FieldLabel>
+                  <NativeSelect
+                    className="w-full"
+                    id="inputSelect"
+                    value={cfgId}
+                    onChange={(e) => setCfgId(Number(e.target.value))}
+                  >
+                    {Array.from({ length: maxMainInput }, (_, i) => (
+                      <NativeSelectOption key={i} value={i}>
+                        Output {i + 1}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="consoleName">System</FieldLabel>
+                  <NativeSelect
+                    className="w-full"
+                    id="consoleName"
+                    value={consoleSel}
+                    onChange={(e) => chooseConsole(Number(e.target.value))}
+                  >
+                    <NativeSelectOption value={-1}>All</NativeSelectOption>
+                    {consoles.map((c, i) => (
+                      <NativeSelectOption key={i} value={i}>
+                        {c}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="presetsName">Preset</FieldLabel>
+                  <NativeSelect
+                    className="w-full"
+                    id="presetsName"
+                    value={presetSel}
+                    onChange={(e) => setPresetSel(Number(e.target.value))}
+                  >
+                    <NativeSelectOption value={-1}>
+                      Select preset
+                    </NativeSelectOption>
+                    {visiblePresets.map(({ preset, index }) => (
+                      <NativeSelectOption key={index} value={index}>
+                        {preset.name}
+                      </NativeSelectOption>
+                    ))}
+                  </NativeSelect>
+                </Field>
+              </FieldGroup>
+
+              <Item variant="muted">
+                <ItemContent>
+                  {selected ? (
+                    <>
+                      <ItemTitle>{selected.name}</ItemTitle>
+                      <ItemDescription className="line-clamp-none">
+                        {selected.desc}
+                      </ItemDescription>
+                    </>
+                  ) : (
+                    <ItemDescription>
+                      Select a system and then preset.
+                    </ItemDescription>
+                  )}
+                </ItemContent>
+              </Item>
+
+              {savePresetMutation.isSuccess && (
+                <Alert>
+                  <CircleCheckIcon />
+                  <AlertTitle>
+                    Config saved, mapping changes take effect immediately.
+                  </AlertTitle>
+                </Alert>
+              )}
+            </CardContent>
+            <CardFooter className="border-t">
+              <Button onClick={saveInput} disabled={presetSel === -1}>
                 Save
-              </button>
-            </div>
-            <div
-              id="inputSaveText"
-              style={{
-                display: savePresetMutation.isSuccess ? "block" : "none",
-                marginTop: "1em",
-              }}
-            >
-              <p
-                style={{
-                  fontStyle: "italic",
-                  fontSize: "small",
-                  color: "green",
-                }}
-              >
-                Config saved, mapping changes take effect immediately.
-              </p>
-            </div>
-          </div>
+              </Button>
+            </CardFooter>
+          </Card>
         </>
       )}
-    </>
+    </div>
   );
 }

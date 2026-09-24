@@ -1,14 +1,26 @@
 import { useMutation } from "@tanstack/react-query";
 import { useRef } from "react";
 
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+
 import { useBlueRetro } from "../components/BlueRetroContext";
+import { NotConnected, PageHeader } from "../components/PageHeader";
 import { ProgressBar } from "../components/ProgressBar";
-import { WikiIntro } from "../components/WikiIntro";
 import { dcReadFile } from "../lib/blueretro/dcReadFile";
 import { dcWriteFile } from "../lib/blueretro/dcWriteFile";
 import { downloadFile } from "../lib/blueretro/downloadFile";
 import { gattSerial } from "../lib/blueretro/gattSerial";
 import { vmuSize } from "../lib/constants";
+import { docs } from "../lib/docs";
 import { log } from "../lib/logger";
 import { setProgress } from "../lib/progress";
 import type { CancelRef } from "../lib/types";
@@ -85,36 +97,60 @@ export function DcVmu() {
   }
 
   return (
-    <>
-      <WikiIntro
-        url="https://github.com/darthcloud/BlueRetro/wiki/BlueRetro-BLE-Web-Config-User-Manual#72---dc-vmu-manager-page"
-        label="7.2 - DC VMU manager page"
+    <div className="space-y-6">
+      <PageHeader
+        title="DC VMU Manager"
+        description="Read and write BlueRetro's emulated VMU."
+        doc={docs.dcVmu}
       />
 
-      {connected && !transferring && (
-        <div id="divFileSelect" style={{ marginBottom: "1em" }}>
-          <button id="btnPakRead" onClick={pakRead}>
-            Read
-          </button>
-          <br />
-          <br />
-          <button id="btnPakWrite" onClick={pakWrite}>
-            Write
-          </button>
-          Select .BIN file to write:
-          <input type="file" id="pakFile" />
-          <br />
-          <br />
-        </div>
-      )}
+      {!connected && <NotConnected what="manage the VMU" />}
+
       {connected && transferring && (
-        <div id="divFileTransfer" style={{ marginBottom: "1em" }}>
-          <ProgressBar />
-          <button id="btnFileTransferCancel" onClick={abortFileTransfer}>
-            Cancel
-          </button>
-        </div>
+        <Card>
+          <CardContent>
+            <ProgressBar
+              label={vmuReadMutation.isPending ? "Reading VMU" : "Writing VMU"}
+            />
+          </CardContent>
+          <CardFooter className="border-t">
+            <Button variant="outline" onClick={abortFileTransfer}>
+              Cancel
+            </Button>
+          </CardFooter>
+        </Card>
       )}
-    </>
+
+      {connected && !transferring && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Read VMU</CardTitle>
+              <CardDescription>
+                Download the current VMU content as vmu.bin.
+              </CardDescription>
+            </CardHeader>
+            <CardFooter>
+              <Button onClick={pakRead}>Read</Button>
+            </CardFooter>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Select .BIN file to write</CardTitle>
+              <CardDescription>
+                Write a saved VMU back onto the adapter.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Input type="file" id="pakFile" accept=".bin" />
+            </CardContent>
+            <CardFooter className="border-t">
+              <Button onClick={pakWrite}>Write</Button>
+            </CardFooter>
+          </Card>
+        </>
+      )}
+    </div>
   );
 }

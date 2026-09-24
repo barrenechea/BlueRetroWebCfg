@@ -1,7 +1,20 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
+import type { DocRef } from "../lib/docs";
+import { DocLink } from "./DocLink";
+
 interface CfgSelectionProps {
   currentCfg: number;
   hasGameId: boolean;
-  docUrl?: string;
+  doc?: DocRef;
   onSwitchToGameId: () => void;
   onSwitchToGlobal: () => void;
 }
@@ -9,36 +22,39 @@ interface CfgSelectionProps {
 export function CfgSelection({
   currentCfg,
   hasGameId,
-  docUrl,
+  doc,
   onSwitchToGameId,
   onSwitchToGlobal,
 }: CfgSelectionProps) {
+  const isGlobal = currentCfg === 0;
+
   return (
-    <div id="divCfgSel" style={{ marginBottom: "1em" }}>
-      <h2 style={{ margin: 0 }}>Config Selection</h2>
-      {docUrl && (
-        <>
-          <a href={docUrl} target="_blank">
-            Wiki doc for Config Selection
-          </a>
-          <br />
-          <br />
-        </>
-      )}
-      {currentCfg == 0 ? "Current config: Global" : "Current config: GameID"}
-      <div style={{ marginTop: "1em" }}>
-        {currentCfg == 0 ? (
+    <Card>
+      <CardHeader>
+        <CardTitle>Config Selection</CardTitle>
+        {doc && (
+          <CardAction>
+            <DocLink href={doc.href}>{doc.label}</DocLink>
+          </CardAction>
+        )}
+      </CardHeader>
+      <CardContent className="flex-row flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Current config</span>
+          <Badge variant="secondary">{isGlobal ? "Global" : "GameID"}</Badge>
+        </div>
+        {isGlobal ? (
           hasGameId && (
-            <button id="cfgSw" onClick={onSwitchToGameId}>
+            <Button variant="outline" onClick={onSwitchToGameId}>
               Switch to GameID
-            </button>
+            </Button>
           )
         ) : (
-          <button id="cfgSw" onClick={onSwitchToGlobal}>
+          <Button variant="outline" onClick={onSwitchToGlobal}>
             Switch to Global
-          </button>
+          </Button>
         )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

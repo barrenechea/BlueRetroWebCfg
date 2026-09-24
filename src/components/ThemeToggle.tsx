@@ -1,24 +1,26 @@
+import { MoonIcon, SunIcon, SunMoonIcon } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+
 import { useTheme } from "../lib/useTheme";
 
-const THEME_CONFIG = {
-  dark: { icon: "☾", label: "Dark" },
-  light: { icon: "☼", label: "Light" },
-  auto: { icon: "⚙", label: "Auto" },
-} as const;
+const ICONS = { light: SunIcon, dark: MoonIcon, auto: SunMoonIcon } as const;
+
+const LABELS = { light: "Light", dark: "Dark", auto: "System" } as const;
 
 export function ThemeToggle() {
   const { theme, cycleTheme } = useTheme();
-  const { icon, label } = THEME_CONFIG[theme];
+  const Icon = ICONS[theme];
 
   return (
-    <button
-      type="button"
-      className="theme-toggle"
+    <Button
+      variant="ghost"
+      size="icon-sm"
       onClick={cycleTheme}
-      aria-label="Toggle color theme"
+      title={`Theme: ${LABELS[theme]}`}
+      aria-label={`Theme: ${LABELS[theme]}. Click to change.`}
     >
-      <span className="theme-toggle-icon">{icon}</span>
-      <span>{label}</span>
-    </button>
+      <Icon />
+    </Button>
   );
 }

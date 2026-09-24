@@ -1,13 +1,27 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { TriangleAlertIcon } from "lucide-react";
 import { useRef } from "react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+
 import { useBlueRetro } from "../components/BlueRetroContext";
+import { NotConnected, PageHeader } from "../components/PageHeader";
 import { ProgressBar } from "../components/ProgressBar";
-import { WikiIntro } from "../components/WikiIntro";
 import { gattSerial } from "../lib/blueretro/gattSerial";
 import { getStringCmd } from "../lib/blueretro/getStringCmd";
 import { otaWriteFirmware } from "../lib/blueretro/otaWriteFirmware";
 import { cfg_cmd_get_fw_name } from "../lib/constants";
+import { docs } from "../lib/docs";
 import { log } from "../lib/logger";
 import { setProgress } from "../lib/progress";
 import type { CancelRef } from "../lib/types";
@@ -106,30 +120,59 @@ export function Ota() {
   }
 
   return (
-    <>
-      <WikiIntro
-        url="https://github.com/darthcloud/BlueRetro/wiki/BlueRetro-BLE-Web-Config-User-Manual#5---ota-fw-update-page"
-        label="5 - OTA FW update page"
+    <div className="space-y-6">
+      <PageHeader
+        title="OTA FW Update"
+        description="Flash a new firmware onto the adapter over Bluetooth."
+        doc={docs.ota}
       />
 
-      {connected && !fwMutation.isPending && (
-        <div id="divFwSelect" style={{ marginBottom: "1em" }}>
-          Select firmware:
-          <input type="file" id="fwFile" name="fw.bin" />
-          <br />
-          <button id="btnFwUpdate" onClick={firmwareUpdate}>
-            Update Firmware
-          </button>
-        </div>
+      {!connected && <NotConnected what="update the firmware" />}
+
+      {connected && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Select firmware</CardTitle>
+            <CardDescription>
+              Pick the .bin for your hardware revision. Make sure to unzip the
+              archive first.
+            </CardDescription>
+          </CardHeader>
+          {fwMutation.isPending ? (
+            <>
+              <CardContent className="gap-6">
+                <ProgressBar label="Flashing firmware" />
+                <Alert variant="destructive">
+                  <TriangleAlertIcon />
+                  <AlertTitle>Do not close this page</AlertTitle>
+                  <AlertDescription>
+                    Keep this page open and the adapter powered until the update
+                    completes.
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+              <CardFooter className="border-t">
+                <Button variant="outline" onClick={abortFwUpdate}>
+                  Cancel
+                </Button>
+              </CardFooter>
+            </>
+          ) : (
+            <>
+              <CardContent>
+                <Input type="file" id="fwFile" name="fw.bin" accept=".bin" />
+              </CardContent>
+              <CardFooter className="gap-3 border-t">
+                <Button onClick={firmwareUpdate}>Update Firmware</Button>
+                <span className="text-muted-foreground text-xs">
+                  The firmware is checked against the adapter hardware revision
+                  before flashing.
+                </span>
+              </CardFooter>
+            </>
+          )}
+        </Card>
       )}
-      {fwMutation.isPending && (
-        <div id="divFwUpdate" style={{ marginBottom: "1em" }}>
-          <ProgressBar />
-          <button id="btnFwUpdateCancel" onClick={abortFwUpdate}>
-            Cancel
-          </button>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

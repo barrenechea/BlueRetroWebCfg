@@ -1,5 +1,25 @@
+/**
+ * Column legend for the inner arrays: each row of `btnList` holds one
+ * control's name in every label set, indexed the same as `labelName`
+ * further down this file. So `btnList[control][labelSet]`, e.g.
+ * `btnList[0][3]` is what the PS3 label set calls control 0.
+ *
+ *    0 Default                14 Switch Joycon          28 3DO
+ *    1 Keyboard               15 Xbox One S / X|S       29 Jaguar
+ *    2 Mouse                  16 Steam                  30 Jaguar 6D
+ *    3 PS3                    17 8bitdo SN30/SF30       31 PC-FX
+ *    4 PS4 / PS5              18 8bitdo M30             32 VB
+ *    5 Wiimote                19 Google Stadia          33 N64
+ *    6 Wiimote + Classic      20 Exlene GameCube        34 GameCube
+ *    7 Wiimote + Classic Pro  21 NeoGeo (Parallel 1P)   35 Atari / SMS
+ *    8 Wiimote + Nunchuck     22 PCE                    36 MD / Genesis
+ *    9 WiiU / Switch Pro      23 PCE 6 btns             37 Saturn
+ *   10 Switch NES             24 NES                    38 Dreamcast
+ *   11 Switch SNES            25 SNES                   39 PSX / PS2
+ *   12 Switch MD / Genesis    26 CD-i                   40 Wii Classic
+ *   13 Switch N64             27 JVS                    41 Wii Classic Pro
+ */
 export const btnList: string[][] = [
-  /*Default                      Keyboard             Mouse                PS3                  PS4 / PS5            Wiimote             Wiimote + Classic        Wiimote + Classic Pro  Wiimote + Nunchuck   WiiU / Switch Pro    Switch NES           Switch SNES          Switch MD / Genesis  Switch N64           Switch Joycon        Xbox One S / X|S     Steam                8bitdo SN30/SF30     8bitdo M30           Google Stadia        Exlene GameCube      NeoGeo (Parallel 1P) PCE                  PCE 6 btns           NES                  SNES                 CD-i                 JVS                  3DO                  Jaguar         Jaguar 6D             PC-FX                VB                          N64                         GameCube             Atari / SMS          MD / Genesis         Saturn               Dreamcast             PSX / PS2            Wii Classic          Wii Classic Pro */
   [
     "GP: LX Left;  KB: A",
     "KB: A",

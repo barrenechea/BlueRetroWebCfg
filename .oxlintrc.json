@@ -56,7 +56,7 @@
       }
     },
     {
-      "files": ["src/routes/**"],
+      "files": ["src/routes/**", "src/components/ui/**"],
       "rules": {
         "react/only-export-components": "off"
       }

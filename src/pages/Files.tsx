@@ -1,7 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Trash2Icon } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from "@/components/ui/item";
 
 import { useBlueRetro } from "../components/BlueRetroContext";
-import { WikiIntro } from "../components/WikiIntro";
+import { NotConnected, PageHeader } from "../components/PageHeader";
 import { gattSerial } from "../lib/blueretro/gattSerial";
 import { getGameName } from "../lib/blueretro/getGameName";
 import {
@@ -11,6 +29,7 @@ import {
   cfg_cmd_close_dir,
   cfg_cmd_del_file,
 } from "../lib/constants";
+import { docs } from "../lib/docs";
 import { log } from "../lib/logger";
 
 interface FileEntry {
@@ -84,25 +103,58 @@ export function Files() {
   }
 
   return (
-    <>
-      <WikiIntro
-        url="https://github.com/darthcloud/BlueRetro/wiki/BlueRetro-BLE-Web-Config-User-Manual#6---files-manager-page"
-        label="6 - Files Manager page"
+    <div className="space-y-6">
+      <PageHeader
+        title="Files Manager"
+        description="Per-GameID configs stored on the adapter."
+        doc={docs.files}
       />
 
+      {!connected && <NotConnected what="browse the files stored on it" />}
+
       {connected && (
-        <div id="divFile" style={{ marginBottom: "1em" }}>
-          <h2 style={{ margin: 0 }}>Files list</h2>
-          {files.map((f, i) => (
-            <div key={i} title={f.gameId}>
-              <button id={String(i)} onClick={() => deleteFile(f.name)}>
-                Delete
-              </button>
-              {" " + f.name}
-            </div>
-          ))}
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Files list</CardTitle>
+            <CardDescription>
+              {filesQuery.isPending
+                ? "Reading..."
+                : `${files.length} file${files.length === 1 ? "" : "s"} on the adapter`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {files.length === 0 ? (
+              <p className="text-muted-foreground py-6 text-center text-sm">
+                {filesQuery.isPending ? "Reading..." : "No files stored."}
+              </p>
+            ) : (
+              <ItemGroup className="gap-2">
+                {files.map((f) => (
+                  <Item key={f.name} variant="outline" size="sm">
+                    <ItemContent className="min-w-0">
+                      <ItemTitle className="font-mono">{f.name}</ItemTitle>
+                      {f.gameId && (
+                        <ItemDescription>{f.gameId}</ItemDescription>
+                      )}
+                    </ItemContent>
+                    <ItemActions>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Delete ${f.name}`}
+                        title="Delete"
+                        onClick={() => deleteFile(f.name)}
+                      >
+                        <Trash2Icon />
+                      </Button>
+                    </ItemActions>
+                  </Item>
+                ))}
+              </ItemGroup>
+            )}
+          </CardContent>
+        </Card>
       )}
-    </>
+    </div>
   );
 }
