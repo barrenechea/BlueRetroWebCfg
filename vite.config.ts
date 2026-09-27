@@ -11,7 +11,22 @@ export default defineConfig({
     devtools(),
     tailwindcss(),
     tanstackStart({
-      prerender: { enabled: true },
+      // advance.html, not advance/index.html: Cloudflare Pages redirects
+      // /advance to /advance/ for the latter.
+      prerender: { enabled: true, autoSubfolderIndex: false },
+      pages: [
+        // App shell as 404.html, which Cloudflare Pages serves for unknown
+        // paths. Not the `spa` option: it also makes the dev server shell only.
+        {
+          // Not "/": pages are deduped by path, so the index would be skipped.
+          path: "/?shell",
+          prerender: {
+            outputPath: "/404",
+            crawlLinks: false,
+            headers: { "X-TSS_SHELL": "true" },
+          },
+        },
+      ],
       router: { quoteStyle: "double", semicolons: true },
     }),
     react({ compiler: true }),

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from "./routes/__root";
 import { Route as IndexRouteImport } from "./routes/index";
+import { Route as SplatRouteImport } from "./routes/$";
 import { Route as AdvanceRouteImport } from "./routes/advance";
 import { Route as Dc_vmuRouteImport } from "./routes/dc_vmu";
 import { Route as DebugRouteImport } from "./routes/debug";
@@ -22,6 +23,11 @@ import { Route as SystemRouteImport } from "./routes/system";
 const IndexRoute = IndexRouteImport.update({
   id: "/",
   path: "/",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const SplatRoute = SplatRouteImport.update({
+  id: "/$",
+  path: "/$",
   getParentRoute: () => rootRouteImport,
 } as any);
 const AdvanceRoute = AdvanceRouteImport.update({
@@ -67,6 +73,7 @@ const SystemRoute = SystemRouteImport.update({
 
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute;
+  "/$": typeof SplatRoute;
   "/advance": typeof AdvanceRoute;
   "/dc_vmu": typeof Dc_vmuRoute;
   "/debug": typeof DebugRoute;
@@ -78,6 +85,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute;
+  "/$": typeof SplatRoute;
   "/advance": typeof AdvanceRoute;
   "/dc_vmu": typeof Dc_vmuRoute;
   "/debug": typeof DebugRoute;
@@ -90,6 +98,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   "/": typeof IndexRoute;
+  "/$": typeof SplatRoute;
   "/advance": typeof AdvanceRoute;
   "/dc_vmu": typeof Dc_vmuRoute;
   "/debug": typeof DebugRoute;
@@ -103,6 +112,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
     | "/"
+    | "/$"
     | "/advance"
     | "/dc_vmu"
     | "/debug"
@@ -114,6 +124,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/"
+    | "/$"
     | "/advance"
     | "/dc_vmu"
     | "/debug"
@@ -125,6 +136,7 @@ export interface FileRouteTypes {
   id:
     | "__root__"
     | "/"
+    | "/$"
     | "/advance"
     | "/dc_vmu"
     | "/debug"
@@ -137,6 +149,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute;
+  SplatRoute: typeof SplatRoute;
   AdvanceRoute: typeof AdvanceRoute;
   Dc_vmuRoute: typeof Dc_vmuRoute;
   DebugRoute: typeof DebugRoute;
@@ -154,6 +167,13 @@ declare module "@tanstack/react-router" {
       path: "/";
       fullPath: "/";
       preLoaderRoute: typeof IndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/$": {
+      id: "/$";
+      path: "/$";
+      fullPath: "/$";
+      preLoaderRoute: typeof SplatRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/advance": {
@@ -217,6 +237,7 @@ declare module "@tanstack/react-router" {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SplatRoute: SplatRoute,
   AdvanceRoute: AdvanceRoute,
   Dc_vmuRoute: Dc_vmuRoute,
   DebugRoute: DebugRoute,
