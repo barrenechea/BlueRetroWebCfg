@@ -2,7 +2,6 @@ import { TanStackDevtools } from "@tanstack/react-devtools";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   HeadContent,
-  Link,
   Outlet,
   ScriptOnce,
   Scripts,
@@ -13,8 +12,17 @@ import { cn } from "cn";
 import { BookOpenIcon, TerminalIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import {
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
+import { AppSidebar } from "../components/AppSidebar";
 import {
   BlueRetroProvider,
   useBlueRetro,
@@ -29,18 +37,6 @@ import { useLocalStorage } from "../lib/useLocalStorage";
 
 // Runs before hydration so the correct theme class is present on first paint.
 const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('blueretro:theme');var parsed=stored?JSON.parse(stored):'auto';var mode=(parsed==='light'||parsed==='dark'||parsed==='auto')?parsed:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');if(resolved==='dark'){root.classList.add('dark');}else{root.classList.add('light');}root.style.colorScheme=resolved;}catch(e){}})();`;
-
-const TABS = [
-  { to: "/", label: "Home" },
-  { to: "/advance", label: "Advance" },
-  { to: "/presets", label: "Presets" },
-  { to: "/system", label: "System" },
-  { to: "/ota", label: "OTA" },
-  { to: "/files", label: "Files" },
-  { to: "/n64_ctrlpak", label: "N64 Pak" },
-  { to: "/dc_vmu", label: "DC VMU" },
-  { to: "/debug", label: "Debug" },
-];
 
 export const Route = createRootRoute({
   head: () => ({
@@ -98,7 +94,9 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <BlueRetroProvider>
-        <RootShell />
+        <TooltipProvider delay={100}>
+          <RootShell />
+        </TooltipProvider>
       </BlueRetroProvider>
     </QueryClientProvider>
   );
@@ -115,42 +113,49 @@ function RootShell() {
   const unread = useUnreadLog(consoleOpen);
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <SiteHeader
-        consoleOpen={consoleOpen}
-        unread={unread}
-        onToggleConsole={() => setConsoleOpen((open) => !open)}
+    <SidebarProvider>
+      <AppSidebar
+        secondary={
+          <SidebarActions
+            consoleOpen={consoleOpen}
+            unread={unread}
+            onToggleConsole={() => setConsoleOpen((open) => !open)}
+          />
+        }
       />
+      <SidebarInset>
+        <MobileHeader />
 
-      <div className="flex flex-1">
-        <main
-          className={cn(
-            "mx-auto w-full max-w-6xl min-w-0 flex-1 space-y-6 px-4 py-6 sm:px-6",
-            // Keep the end of the page reachable above the bottom sheet.
-            consoleOpen && "pb-[calc(45dvh+1.5rem)] lg:pb-6",
+        <div className="flex flex-1">
+          <div
+            className={cn(
+              "mx-auto w-full max-w-6xl min-w-0 flex-1 space-y-6 px-4 py-6 sm:px-6",
+              // Keep the end of the page reachable above the bottom sheet.
+              consoleOpen && "pb-[calc(45dvh+1.5rem)] lg:pb-6",
+            )}
+          >
+            <ConnectionPanel
+              connected={connected}
+              connecting={connecting}
+              info={info}
+              gameid={gameid}
+              gamename={gamename}
+              onConnect={() => void connect()}
+              onDisconnect={disconnect}
+            />
+
+            <Outlet />
+          </div>
+
+          {consoleOpen && (
+            <ConsolePanel
+              onClose={() => setConsoleOpen(false)}
+              className="animate-in fade-in-0 slide-in-from-bottom-4 lg:slide-in-from-right-4 fixed inset-x-0 bottom-0 z-20 h-[45dvh] border-t shadow-lg duration-200 lg:sticky lg:top-0 lg:bottom-auto lg:z-auto lg:h-dvh lg:w-md lg:shrink-0 lg:border-t-0 lg:border-l lg:shadow-none"
+            />
           )}
-        >
-          <ConnectionPanel
-            connected={connected}
-            connecting={connecting}
-            info={info}
-            gameid={gameid}
-            gamename={gamename}
-            onConnect={() => void connect()}
-            onDisconnect={disconnect}
-          />
-
-          <Outlet />
-        </main>
-
-        {consoleOpen && (
-          <ConsolePanel
-            onClose={() => setConsoleOpen(false)}
-            className="animate-in fade-in-0 slide-in-from-bottom-4 lg:slide-in-from-right-4 fixed inset-x-0 bottom-0 z-20 h-[45dvh] border-t shadow-lg duration-200 lg:sticky lg:top-14 lg:bottom-auto lg:z-auto lg:h-[calc(100dvh-3.5rem)] lg:w-md lg:shrink-0 lg:border-t-0 lg:border-l lg:shadow-none"
-          />
-        )}
-      </div>
-    </div>
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 
@@ -170,7 +175,7 @@ function useUnreadLog(open: boolean): Unread {
   return unseen.length > 0 ? "info" : "none";
 }
 
-function ConsoleToggle({
+function ConsoleMenuItem({
   open,
   unread,
   onToggle,
@@ -179,31 +184,32 @@ function ConsoleToggle({
   unread: Unread;
   onToggle: () => void;
 }) {
-  const label = open ? "Hide console" : "Show console";
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      title={label}
-      aria-label={label}
-      aria-pressed={open}
-      onClick={onToggle}
-      className="relative aria-pressed:bg-muted"
-    >
-      <TerminalIcon />
-      {unread != "none" && (
-        <span
-          className={cn(
-            "ring-background absolute top-1 right-1 size-2 rounded-full ring-2",
-            unread == "error" ? "bg-destructive" : "bg-primary",
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip="Console"
+        isActive={open}
+        aria-pressed={open}
+        onClick={onToggle}
+      >
+        <span className="relative flex">
+          <TerminalIcon />
+          {unread != "none" && (
+            <span
+              className={cn(
+                "ring-sidebar absolute -top-0.5 -right-0.5 size-2 rounded-full ring-2",
+                unread == "error" ? "bg-destructive" : "bg-primary",
+              )}
+            />
           )}
-        />
-      )}
-    </Button>
+        </span>
+        <span>Console</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
-function IconLink({
+function LinkMenuItem({
   href,
   label,
   children,
@@ -213,20 +219,30 @@ function IconLink({
   children: ReactNode;
 }) {
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      title={label}
-      aria-label={label}
-      nativeButton={false}
-      render={<a href={href} target="_blank" rel="noreferrer" />}
-    >
-      {children}
-    </Button>
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip={label}
+        render={<a href={href} target="_blank" rel="noreferrer" />}
+      >
+        {children}
+        <span>{label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
-function SiteHeader({
+// The sidebar is a drawer below md, so it needs its own trigger.
+function MobileHeader() {
+  return (
+    <header className="bg-background/85 sticky top-0 z-30 flex h-12 items-center gap-2 border-b px-3 backdrop-blur-sm md:hidden">
+      <SidebarTrigger />
+      <img src="/icon.png" alt="" className="size-9 shrink-0" />
+      <span className="text-base font-semibold">BlueRetro</span>
+    </header>
+  );
+}
+
+function SidebarActions({
   consoleOpen,
   unread,
   onToggleConsole,
@@ -236,56 +252,24 @@ function SiteHeader({
   onToggleConsole: () => void;
 }) {
   return (
-    <header className="bg-background/85 sticky top-0 z-30 border-b backdrop-blur-sm">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6 lg:h-14 lg:flex-nowrap lg:py-0">
-        <div className="order-1 flex min-w-0 items-center gap-3">
-          <img src="/icon.png" alt="" className="size-7 shrink-0" />
-          <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-semibold tracking-tight">
-              BlueRetro
-            </p>
-            <p className="text-muted-foreground truncate text-xs">Web config</p>
-          </div>
-        </div>
-
-        <nav
-          aria-label="Configuration pages"
-          className="order-3 -mx-1 flex w-full gap-0.5 overflow-x-auto lg:order-2 lg:mx-auto lg:w-auto"
-        >
-          {TABS.map((tab) => (
-            <Button
-              key={tab.to}
-              variant="ghost"
-              size="sm"
-              nativeButton={false}
-              className="text-muted-foreground data-[status=active]:bg-muted data-[status=active]:text-foreground"
-              render={
-                <Link to={tab.to} activeOptions={{ exact: tab.to === "/" }} />
-              }
-            >
-              {tab.label}
-            </Button>
-          ))}
-        </nav>
-
-        <div className="order-2 ml-auto flex items-center gap-1 lg:order-3 lg:ml-0">
-          <IconLink href={links.wiki} label="Wiki">
-            <BookOpenIcon />
-          </IconLink>
-          <IconLink href={links.repo} label="View on GitHub">
-            <svg viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38l-.01-1.49c-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-            </svg>
-          </IconLink>
-          <ThemeToggle />
-          <ConsoleToggle
-            open={consoleOpen}
-            unread={unread}
-            onToggle={onToggleConsole}
-          />
-        </div>
-      </div>
-    </header>
+    <SidebarMenu>
+      <LinkMenuItem href={links.wiki} label="Wiki">
+        <BookOpenIcon />
+      </LinkMenuItem>
+      <LinkMenuItem href={links.repo} label="GitHub">
+        <svg viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38l-.01-1.49c-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48l-.01 2.2c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+        </svg>
+      </LinkMenuItem>
+      <SidebarMenuItem>
+        <ThemeToggle />
+      </SidebarMenuItem>
+      <ConsoleMenuItem
+        open={consoleOpen}
+        unread={unread}
+        onToggle={onToggleConsole}
+      />
+    </SidebarMenu>
   );
 }
 

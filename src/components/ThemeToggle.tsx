@@ -1,6 +1,6 @@
 import { MoonIcon, SunIcon, SunMoonIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { SidebarMenuButton } from "@/components/ui/sidebar";
 
 import { useTheme } from "../lib/useTheme";
 
@@ -11,16 +11,16 @@ const LABELS = { light: "Light", dark: "Dark", auto: "System" } as const;
 export function ThemeToggle() {
   const { theme, cycleTheme } = useTheme();
   const Icon = ICONS[theme];
+  const label = `Theme: ${LABELS[theme]}`;
 
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
+    <SidebarMenuButton
+      tooltip={label}
       onClick={cycleTheme}
-      title={`Theme: ${LABELS[theme]}`}
-      aria-label={`Theme: ${LABELS[theme]}. Click to change.`}
+      aria-label={`${label}. Click to change.`}
     >
       <Icon />
-    </Button>
+      <span>{label}</span>
+    </SidebarMenuButton>
   );
 }
