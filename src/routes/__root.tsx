@@ -9,8 +9,9 @@ import {
   createRootRoute,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
-import { BookOpenIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { cn } from "cn";
+import { BookOpenIcon, TerminalIcon } from "lucide-react";
+import { type ReactNode, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -19,11 +20,12 @@ import {
   useBlueRetro,
 } from "../components/BlueRetroContext";
 import { ConnectionPanel } from "../components/ConnectionPanel";
-import { OutputPanel } from "../components/OutputPanel";
+import { ConsolePanel } from "../components/ConsolePanel";
 import { ThemeToggle } from "../components/ThemeToggle";
 import indexCss from "../index.css?url";
 import { links } from "../lib/docs";
-import { ChromeSamples } from "../lib/logger";
+import { ChromeSamples, useLog } from "../lib/logger";
+import { useLocalStorage } from "../lib/useLocalStorage";
 
 // Runs before hydration so the correct theme class is present on first paint.
 const THEME_INIT_SCRIPT = `(function(){try{var stored=window.localStorage.getItem('blueretro:theme');var parsed=stored?JSON.parse(stored):'auto';var mode=(parsed==='light'||parsed==='dark'||parsed==='auto')?parsed:'auto';var prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='auto'?(prefersDark?'dark':'light'):mode;var root=document.documentElement;root.classList.remove('light','dark');if(resolved==='dark'){root.classList.add('dark');}else{root.classList.add('light');}root.style.colorScheme=resolved;}catch(e){}})();`;
@@ -106,25 +108,98 @@ function RootShell() {
   const { info, gamename, gameid, connected, connecting, connect, disconnect } =
     useBlueRetro();
 
+  const [consoleOpen, setConsoleOpen] = useLocalStorage(
+    "blueretro:console-open",
+    false,
+  );
+  const unread = useUnreadLog(consoleOpen);
+
   return (
     <div className="flex min-h-dvh flex-col">
-      <SiteHeader />
+      <SiteHeader
+        consoleOpen={consoleOpen}
+        unread={unread}
+        onToggleConsole={() => setConsoleOpen((open) => !open)}
+      />
 
-      <main className="mx-auto w-full max-w-6xl flex-1 space-y-6 px-4 py-6 sm:px-6">
-        <ConnectionPanel
-          connected={connected}
-          connecting={connecting}
-          info={info}
-          gameid={gameid}
-          gamename={gamename}
-          onConnect={() => void connect()}
-          onDisconnect={disconnect}
-        />
+      <div className="flex flex-1">
+        <main
+          className={cn(
+            "mx-auto w-full max-w-6xl min-w-0 flex-1 space-y-6 px-4 py-6 sm:px-6",
+            // Keep the end of the page reachable above the bottom sheet.
+            consoleOpen && "pb-[calc(45dvh+1.5rem)] lg:pb-6",
+          )}
+        >
+          <ConnectionPanel
+            connected={connected}
+            connecting={connecting}
+            info={info}
+            gameid={gameid}
+            gamename={gamename}
+            onConnect={() => void connect()}
+            onDisconnect={disconnect}
+          />
 
-        <Outlet />
-        <OutputPanel />
-      </main>
+          <Outlet />
+        </main>
+
+        {consoleOpen && (
+          <ConsolePanel
+            onClose={() => setConsoleOpen(false)}
+            className="animate-in fade-in-0 slide-in-from-bottom-4 lg:slide-in-from-right-4 fixed inset-x-0 bottom-0 z-20 h-[45dvh] border-t shadow-lg duration-200 lg:sticky lg:top-14 lg:bottom-auto lg:z-auto lg:h-[calc(100dvh-3.5rem)] lg:w-md lg:shrink-0 lg:border-t-0 lg:border-l lg:shadow-none"
+          />
+        )}
+      </div>
     </div>
+  );
+}
+
+type Unread = "none" | "info" | "error";
+
+// What the console has logged since it was last open.
+function useUnreadLog(open: boolean): Unread {
+  const { lines, status } = useLog();
+  const lastId = lines.at(-1)?.id ?? -1;
+  const [seenId, setSeenId] = useState(-1);
+
+  if (open && seenId != lastId) setSeenId(lastId);
+
+  if (open) return "none";
+  const unseen = lines.filter((line) => line.id > seenId);
+  if (status || unseen.some((line) => line.error)) return "error";
+  return unseen.length > 0 ? "info" : "none";
+}
+
+function ConsoleToggle({
+  open,
+  unread,
+  onToggle,
+}: {
+  open: boolean;
+  unread: Unread;
+  onToggle: () => void;
+}) {
+  const label = open ? "Hide console" : "Show console";
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      title={label}
+      aria-label={label}
+      aria-pressed={open}
+      onClick={onToggle}
+      className="relative aria-pressed:bg-muted"
+    >
+      <TerminalIcon />
+      {unread != "none" && (
+        <span
+          className={cn(
+            "ring-background absolute top-1 right-1 size-2 rounded-full ring-2",
+            unread == "error" ? "bg-destructive" : "bg-primary",
+          )}
+        />
+      )}
+    </Button>
   );
 }
 
@@ -151,7 +226,15 @@ function IconLink({
   );
 }
 
-function SiteHeader() {
+function SiteHeader({
+  consoleOpen,
+  unread,
+  onToggleConsole,
+}: {
+  consoleOpen: boolean;
+  unread: Unread;
+  onToggleConsole: () => void;
+}) {
   return (
     <header className="bg-background/85 sticky top-0 z-30 border-b backdrop-blur-sm">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6 lg:h-14 lg:flex-nowrap lg:py-0">
@@ -195,6 +278,11 @@ function SiteHeader() {
             </svg>
           </IconLink>
           <ThemeToggle />
+          <ConsoleToggle
+            open={consoleOpen}
+            unread={unread}
+            onToggle={onToggleConsole}
+          />
         </div>
       </div>
     </header>
