@@ -6,4 +6,4 @@ Those pages are base on [Google Chrome Samples](https://github.com/GoogleChrome/
 
 More detail BlueRetro:\
 [Main hackaday.io page](https://hackaday.io/project/170365-blueretro)\
-[Software files repository](https://github.com/darthcloud/BlueRetro)
+[Software files repository](https://github.com/barrenechea/BlueRetro)

@@ -1,4 +1,4 @@
-const REPO = "https://github.com/darthcloud/BlueRetro";
+const REPO = "https://github.com/barrenechea/BlueRetro";
 const WIKI = REPO + "/wiki";
 const MANUAL = WIKI + "/BlueRetro-BLE-Web-Config-User-Manual";
 
@@ -41,7 +41,7 @@ export const docs = {
   n64CtrlPak: section("7.1 - N64 controller pak manager page"),
   dcVmu: section("7.2 - DC VMU manager page"),
   debugTrace: {
-    href: "https://github.com/darthcloud/BlueRetroWiki/blob/master/Debug-trace.md",
+    href: WIKI + "/Debug-trace",
     label: "Debug Trace Documentation",
   },
 };
