@@ -148,6 +148,7 @@ function DeviceMeta({
     parts.push(<span className="font-mono">{info.bdaddr}</span>);
   if (info?.appVer) parts.push(info.appVer);
   if (gamename) parts.push(gameid ? `${gamename} (${gameid})` : gamename);
+  else if (gameid) parts.push(gameid);
 
   return (
     <>

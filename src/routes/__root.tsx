@@ -123,7 +123,7 @@ function RootShell() {
           />
         }
       />
-      <SidebarInset>
+      <SidebarInset className="min-w-0">
         <MobileHeader />
 
         <div className="flex flex-1">

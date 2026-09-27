@@ -7,7 +7,8 @@ export const getAppVersion = async (
   const chrc = await service.getCharacteristic(brUuid[9]);
   ChromeSamples.log("Reading App version...");
   const value = await chrc.readValue();
-  let app_ver = new TextDecoder("utf-8").decode(value);
+  // The firmware sends a NUL-terminated string.
+  let app_ver = new TextDecoder("utf-8").decode(value).replace(/\0/g, "");
   return app_ver;
 };
 
