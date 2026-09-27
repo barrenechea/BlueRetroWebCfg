@@ -1,6 +1,5 @@
 const REPO = "https://github.com/barrenechea/BlueRetro";
 const WIKI = REPO + "/wiki";
-const MANUAL = WIKI + "/BlueRetro-BLE-Web-Config-User-Manual";
 
 export interface DocRef {
   href: string;
@@ -8,15 +7,15 @@ export interface DocRef {
 }
 
 /**
- * GitHub derives a heading's anchor from the heading text, so one string gives
- * both the link and the label. Keep these identical to the wiki headings.
+ * One wiki page per documented section: GitHub wikis don't scroll to a
+ * `#heading` link on page load, so section anchors would land at the top.
+ * The label is the page title GitHub shows, minus the shared prefix.
  */
-function section(heading: string): DocRef {
-  const anchor = heading
-    .toLowerCase()
-    .replace(/[^\w\- ]/g, "")
-    .replace(/ /g, "-");
-  return { href: MANUAL + "#" + anchor, label: heading };
+function page(name: string): DocRef {
+  return {
+    href: WIKI + "/" + name,
+    label: name.replace(/^Web-Config-/, "").replace(/-/g, " "),
+  };
 }
 
 export const links = {
@@ -28,20 +27,17 @@ export const links = {
 };
 
 export const docs = {
-  manual: { href: MANUAL, label: "BlueRetro BLE Web Config User Manual" },
-  advance: section("2 - Advance config page"),
-  cfgSelection: section("2.1 - Config selection"),
-  globalCfg: section("2.2 - Global config"),
-  outputCfg: section("2.3 - Output config"),
-  mappingCfg: section("2.4 - Mapping config"),
-  presets: section("3 - Presets page"),
-  system: section("4 - System manager page"),
-  ota: section("5 - OTA FW update page"),
-  files: section("6 - Files manager page"),
-  n64CtrlPak: section("7.1 - N64 controller pak manager page"),
-  dcVmu: section("7.2 - DC VMU manager page"),
-  debugTrace: {
-    href: WIKI + "/Debug-trace",
-    label: "Debug Trace Documentation",
-  },
+  manual: page("BlueRetro-BLE-Web-Config-User-Manual"),
+  advance: page("Web-Config-Advance-Config"),
+  cfgSelection: page("Web-Config-Config-Selection"),
+  globalCfg: page("Web-Config-Global-Config"),
+  outputCfg: page("Web-Config-Output-Config"),
+  mappingCfg: page("Web-Config-Mapping-Config"),
+  presets: page("Web-Config-Presets"),
+  system: page("Web-Config-System-Manager"),
+  ota: page("Web-Config-OTA-FW-Update"),
+  files: page("Web-Config-Files-Manager"),
+  n64CtrlPak: page("Web-Config-N64-Controller-Pak-Manager"),
+  dcVmu: page("Web-Config-DC-VMU-Manager"),
+  debugTrace: page("Debug-trace"),
 };
