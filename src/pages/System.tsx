@@ -1,4 +1,3 @@
-import { useMutation } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -13,28 +12,18 @@ import {
 
 import { useBlueRetro } from "../components/BlueRetroContext";
 import { NotConnected, PageHeader } from "../components/PageHeader";
-import { gattSerial } from "../lib/blueretro/gattSerial";
-import { setDeepSleep } from "../lib/blueretro/setDeepSleep";
-import { setFactoryReset } from "../lib/blueretro/setFactoryReset";
-import { setReset } from "../lib/blueretro/setReset";
 import { docs } from "../lib/docs";
-import { log } from "../lib/logger";
+import {
+  useDeepSleep,
+  useFactoryReset,
+  useResetAdapter,
+} from "../lib/mutations";
 
 export function System() {
-  const { connected, serviceRef } = useBlueRetro();
-
-  const sleepMutation = useMutation({
-    mutationFn: () => gattSerial(() => setDeepSleep(serviceRef.current!)),
-    onError: (error) => log("Argh! " + error),
-  });
-  const resetMutation = useMutation({
-    mutationFn: () => gattSerial(() => setReset(serviceRef.current!)),
-    onError: (error) => log("Argh! " + error),
-  });
-  const factoryMutation = useMutation({
-    mutationFn: () => gattSerial(() => setFactoryReset(serviceRef.current!)),
-    onError: (error) => log("Argh! " + error),
-  });
+  const { connected } = useBlueRetro();
+  const sleepMutation = useDeepSleep();
+  const resetMutation = useResetAdapter();
+  const factoryMutation = useFactoryReset();
 
   return (
     <div className="space-y-6">

@@ -1,47 +1,15 @@
-import { useRef, useState } from "react";
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 
 import { useBlueRetro } from "../components/BlueRetroContext";
 import { NotConnected, PageHeader } from "../components/PageHeader";
 import { ProgressBar } from "../components/ProgressBar";
-import { dcReadFile } from "../lib/blueretro/dcReadFile";
-import { downloadFile } from "../lib/blueretro/downloadFile";
 import { docs } from "../lib/docs";
-import { log } from "../lib/logger";
-import { setProgress } from "../lib/progress";
-import type { CancelRef } from "../lib/types";
+import { useDownloadDebugTrace } from "../lib/mutations";
 
 export function Debug() {
-  const { connected, serviceRef } = useBlueRetro();
-  const [transferring, setTransferring] = useState(false);
-  // Real ref object so the recursive reader's cancel check works (the old
-  // code passed a plain number, which made Cancel a no-op).
-  const cancelRef = useRef<CancelRef>({ current: 0 });
-
-  function abortFileTransfer() {
-    cancelRef.current.current = 1;
-  }
-
-  async function pakRead() {
-    setTransferring(true);
-    try {
-      const value = await dcReadFile(
-        serviceRef.current!,
-        setProgress,
-        cancelRef.current,
-      );
-      downloadFile(
-        new Blob([value.buffer as ArrayBuffer], { type: "application/bin" }),
-        "br_debug_trace.bin",
-      );
-    } catch (error) {
-      log("Argh! " + error);
-      cancelRef.current.current = 0;
-    }
-    setTransferring(false);
-  }
+  const { connected } = useBlueRetro();
+  const traceMutation = useDownloadDebugTrace();
 
   return (
     <div className="space-y-6">
@@ -55,20 +23,20 @@ export function Debug() {
 
       {connected && (
         <Card>
-          {transferring ? (
+          {traceMutation.isRunning ? (
             <>
               <CardContent>
                 <ProgressBar label="Downloading debug trace" />
               </CardContent>
               <CardFooter className="border-t">
-                <Button variant="outline" onClick={abortFileTransfer}>
+                <Button variant="outline" onClick={traceMutation.cancel}>
                   Cancel
                 </Button>
               </CardFooter>
             </>
           ) : (
             <CardFooter>
-              <Button onClick={() => void pakRead()}>
+              <Button onClick={() => traceMutation.mutate()}>
                 Download debug trace
               </Button>
             </CardFooter>

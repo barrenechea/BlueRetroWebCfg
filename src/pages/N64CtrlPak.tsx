@@ -1,5 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -20,67 +19,17 @@ import {
 import { useBlueRetro } from "../components/BlueRetroContext";
 import { NotConnected, PageHeader } from "../components/PageHeader";
 import { ProgressBar } from "../components/ProgressBar";
-import { downloadFile } from "../lib/blueretro/downloadFile";
-import { gattSerial } from "../lib/blueretro/gattSerial";
 import { makeFormattedPak } from "../lib/blueretro/makeFormattedPak";
-import { n64ReadFile } from "../lib/blueretro/n64ReadFile";
-import { n64WriteFile } from "../lib/blueretro/n64WriteFile";
-import { pakSize } from "../lib/constants";
 import { docs, links } from "../lib/docs";
 import { log } from "../lib/logger";
-import { setProgress } from "../lib/progress";
-import type { CancelRef } from "../lib/types";
+import { useDownloadCtrlPak, useWriteCtrlPak } from "../lib/mutations";
 
 export function N64CtrlPak() {
-  const { connected, serviceRef } = useBlueRetro();
+  const { connected } = useBlueRetro();
   const [pak, setPak] = useState(0);
-  // Real ref object so the recursive readers/writers' cancel check works
-  // (the old code passed a plain number, which made Cancel a no-op).
-  const cancelRef = useRef<CancelRef>({ current: 0 });
-
-  const pakReadMutation = useMutation({
-    mutationFn: () =>
-      gattSerial(() =>
-        n64ReadFile(serviceRef.current!, pak, setProgress, cancelRef.current),
-      ),
-    onSuccess: (value) => {
-      downloadFile(
-        new Blob([value.buffer as ArrayBuffer], { type: "application/mpk" }),
-        "ctrl_pak" + (pak + 1) + ".mpk",
-      );
-    },
-    onError: (error) => log("Argh! " + error),
-    onSettled: () => {
-      cancelRef.current.current = 0;
-    },
-  });
-
-  const pakWriteMutation = useMutation({
-    mutationFn: (data: ArrayBuffer) =>
-      gattSerial(() =>
-        n64WriteFile(
-          serviceRef.current!,
-          data,
-          pak,
-          setProgress,
-          cancelRef.current,
-        ),
-      ),
-    onError: (error) => log("Argh! " + error),
-    onSettled: () => {
-      cancelRef.current.current = 0;
-    },
-  });
-
-  const transferring = pakReadMutation.isPending || pakWriteMutation.isPending;
-
-  function abortFileTransfer() {
-    cancelRef.current.current = 1;
-  }
-
-  function pakRead() {
-    pakReadMutation.mutate();
-  }
+  const readMutation = useDownloadCtrlPak();
+  const writeMutation = useWriteCtrlPak();
+  const transferring = readMutation.isRunning || writeMutation.isRunning;
 
   function pakWrite() {
     const reader = new FileReader();
@@ -91,15 +40,11 @@ export function N64CtrlPak() {
       log("File read cancelled");
     };
     reader.onload = function () {
-      pakWriteMutation.mutate((reader.result as ArrayBuffer).slice(0, pakSize));
+      writeMutation.mutate({ pak, data: reader.result as ArrayBuffer });
     };
     reader.readAsArrayBuffer(
       (document.getElementById("pakFile") as HTMLInputElement).files![0],
     );
-  }
-
-  function pakFormat() {
-    pakWriteMutation.mutate(makeFormattedPak().buffer);
   }
 
   return (
@@ -116,11 +61,16 @@ export function N64CtrlPak() {
         <Card>
           <CardContent>
             <ProgressBar
-              label={pakReadMutation.isPending ? "Reading pak" : "Writing pak"}
+              label={readMutation.isRunning ? "Reading pak" : "Writing pak"}
             />
           </CardContent>
           <CardFooter className="border-t">
-            <Button variant="outline" onClick={abortFileTransfer}>
+            <Button
+              variant="outline"
+              onClick={() =>
+                (readMutation.isRunning ? readMutation : writeMutation).cancel()
+              }
+            >
               Cancel
             </Button>
           </CardFooter>
@@ -153,8 +103,13 @@ export function N64CtrlPak() {
               </Field>
             </CardContent>
             <CardFooter className="gap-2 border-t">
-              <Button onClick={pakRead}>Read</Button>
-              <Button variant="outline" onClick={pakFormat}>
+              <Button onClick={() => readMutation.mutate(pak)}>Read</Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  writeMutation.mutate({ pak, data: makeFormattedPak().buffer })
+                }
+              >
                 Format
               </Button>
             </CardFooter>

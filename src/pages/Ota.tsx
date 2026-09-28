@@ -1,7 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
 import { TriangleAlertIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -36,23 +36,19 @@ import {
 import { useBlueRetro } from "../components/BlueRetroContext";
 import { NotConnected, PageHeader } from "../components/PageHeader";
 import { ProgressBar } from "../components/ProgressBar";
+import { QueryBoundary } from "../components/QueryBoundary";
 import {
   compareHardware,
   compareSystem,
   type FwCheck,
   type FwIdentity,
   fwSystemLabel,
-  parseAdapterIdentity,
   readFwImage,
 } from "../lib/blueretro/fwIdentity";
-import { gattSerial } from "../lib/blueretro/gattSerial";
-import { getStringCmd } from "../lib/blueretro/getStringCmd";
-import { otaWriteFirmware } from "../lib/blueretro/otaWriteFirmware";
-import { cfg_cmd_get_fw_name } from "../lib/constants";
 import { docs } from "../lib/docs";
 import { log } from "../lib/logger";
-import { setProgress } from "../lib/progress";
-import type { CancelRef } from "../lib/types";
+import { useFlashFirmware } from "../lib/mutations";
+import { useAdapterIdentity } from "../lib/queries";
 
 interface FwSide {
   identity: FwIdentity;
@@ -68,67 +64,45 @@ interface Mismatch {
 }
 
 export function Ota() {
-  const { connected, info, serviceRef } = useBlueRetro();
-  const queryClient = useQueryClient();
-  // Real ref object so the recursive writer's cancel check works (the old
-  // code passed a plain number, which made Cancel a no-op).
-  const cancelRef = useRef<CancelRef>({ current: 0 });
+  const { connected } = useBlueRetro();
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="OTA FW Update"
+        description="Flash a new firmware onto the adapter over Bluetooth."
+        doc={docs.ota}
+      />
+
+      {!connected && <NotConnected what="update the firmware" />}
+
+      {connected && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Select firmware</CardTitle>
+            <CardDescription>
+              Pick the .bin for your hardware revision. Make sure to unzip the
+              archive first.
+            </CardDescription>
+          </CardHeader>
+          <QueryBoundary fallback={<FirmwareSkeleton />}>
+            <FirmwareForm />
+          </QueryBoundary>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function FirmwareForm() {
+  const { info } = useBlueRetro();
+  const adapter = useAdapterIdentity().data.identity;
   // Kept separate from `mismatchOpen` so the dialog keeps its content while
   // it animates closed.
   const [mismatch, setMismatch] = useState<Mismatch | null>(null);
   const [mismatchOpen, setMismatchOpen] = useState(false);
 
-  const fwQuery = useQuery({
-    queryKey: ["ota", "fw"],
-    enabled: connected && info !== null,
-    queryFn: () =>
-      gattSerial(async () => {
-        const appVer = info!.appVer;
-        const appVerIs18x = appVer.indexOf("v1.8") != -1;
-        const appVerBogus = appVer.indexOf("v") == -1;
-        let appName = "";
-        if (!appVerIs18x && !appVerBogus) {
-          appName = await getStringCmd(
-            serviceRef.current!,
-            cfg_cmd_get_fw_name,
-          );
-        }
-        const identity = parseAdapterIdentity(appName, appVer);
-        log(
-          "app_name: " +
-            JSON.stringify(appName.replace(/\0/g, "")) +
-            " hw: " +
-            identity.hardware +
-            " systems: " +
-            identity.systems,
-        );
-        return identity;
-      }),
-  });
-
-  const fwMutation = useMutation({
-    mutationFn: (data: ArrayBuffer) =>
-      gattSerial(() =>
-        otaWriteFirmware(
-          serviceRef.current!,
-          data,
-          setProgress,
-          cancelRef.current,
-        ),
-      ),
-    onSuccess: () => {
-      // The firmware changed: refetch the cached fw info.
-      void queryClient.invalidateQueries({ queryKey: ["ota"] });
-    },
-    onError: (error) => log("Argh! " + error),
-    onSettled: () => {
-      cancelRef.current.current = 0;
-    },
-  });
-
-  function abortFwUpdate() {
-    cancelRef.current.current = 1;
-  }
+  const fwMutation = useFlashFirmware();
 
   function flashAnyway() {
     setMismatchOpen(false);
@@ -156,7 +130,6 @@ export function Ota() {
           " systems: " +
           file.systems,
       );
-      const adapter = fwQuery.data ?? parseAdapterIdentity("", "");
       const hardware = compareHardware(adapter, file);
       const system = compareSystem(adapter, file);
       if (hardware == "match" && system == "match") {
@@ -185,58 +158,39 @@ export function Ota() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="OTA FW Update"
-        description="Flash a new firmware onto the adapter over Bluetooth."
-        doc={docs.ota}
-      />
-
-      {!connected && <NotConnected what="update the firmware" />}
-
-      {connected && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Select firmware</CardTitle>
-            <CardDescription>
-              Pick the .bin for your hardware revision. Make sure to unzip the
-              archive first.
-            </CardDescription>
-          </CardHeader>
-          {fwMutation.isPending ? (
-            <>
-              <CardContent className="gap-6">
-                <ProgressBar label="Flashing firmware" />
-                <Alert variant="destructive">
-                  <TriangleAlertIcon />
-                  <AlertTitle>Do not close this page</AlertTitle>
-                  <AlertDescription>
-                    Keep this page open and the adapter powered until the update
-                    completes.
-                  </AlertDescription>
-                </Alert>
-              </CardContent>
-              <CardFooter className="border-t">
-                <Button variant="outline" onClick={abortFwUpdate}>
-                  Cancel
-                </Button>
-              </CardFooter>
-            </>
-          ) : (
-            <>
-              <CardContent>
-                <Input type="file" id="fwFile" name="fw.bin" accept=".bin" />
-              </CardContent>
-              <CardFooter className="gap-3 border-t">
-                <Button onClick={firmwareUpdate}>Update Firmware</Button>
-                <span className="text-muted-foreground text-xs">
-                  The firmware is checked against the adapter hardware revision
-                  before flashing.
-                </span>
-              </CardFooter>
-            </>
-          )}
-        </Card>
+    <>
+      {fwMutation.isRunning ? (
+        <>
+          <CardContent className="gap-6">
+            <ProgressBar label="Flashing firmware" />
+            <Alert variant="destructive">
+              <TriangleAlertIcon />
+              <AlertTitle>Do not close this page</AlertTitle>
+              <AlertDescription>
+                Keep this page open and the adapter powered until the update
+                completes.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+          <CardFooter className="border-t">
+            <Button variant="outline" onClick={fwMutation.cancel}>
+              Cancel
+            </Button>
+          </CardFooter>
+        </>
+      ) : (
+        <>
+          <CardContent>
+            <Input type="file" id="fwFile" name="fw.bin" accept=".bin" />
+          </CardContent>
+          <CardFooter className="gap-3 border-t">
+            <Button onClick={firmwareUpdate}>Update Firmware</Button>
+            <span className="text-muted-foreground text-xs">
+              The firmware is checked against the adapter hardware revision
+              before flashing.
+            </span>
+          </CardFooter>
+        </>
       )}
 
       <Dialog
@@ -273,7 +227,21 @@ export function Ota() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
+  );
+}
+
+function FirmwareSkeleton() {
+  return (
+    <>
+      <CardContent aria-busy>
+        <Skeleton className="h-9 w-full" />
+      </CardContent>
+      <CardFooter className="gap-3 border-t">
+        <Skeleton className="h-9 w-36" />
+        <Skeleton className="h-3.5 w-72 max-w-full" />
+      </CardFooter>
+    </>
   );
 }
 

@@ -1,4 +1,3 @@
-import { useMutation } from "@tanstack/react-query";
 import { CircleCheckIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -25,58 +24,23 @@ import {
 
 import { useBlueRetro } from "../components/BlueRetroContext";
 import { CfgSelection } from "../components/CfgSelection";
+import { FIELD_GRID } from "../components/FormSkeleton";
 import { NotConnected, PageHeader } from "../components/PageHeader";
-import { gattSerial } from "../lib/blueretro/gattSerial";
-import { getCfgSrc } from "../lib/blueretro/getCfgSrc";
-import { savePresetInput } from "../lib/blueretro/savePresetInput";
-import { setDefaultCfg } from "../lib/blueretro/setDefaultCfg";
-import { setGameIdCfg } from "../lib/blueretro/setGameIdCfg";
+import { presetMappings } from "../lib/blueretro/presetMappings";
 import { maxMainInput } from "../lib/constants";
 import { docs } from "../lib/docs";
-import { log } from "../lib/logger";
+import { mutationKeys, useCfgLocked, useSaveInputCfg } from "../lib/mutations";
 import { presets, consoles } from "../lib/presets";
-import type { Preset } from "../lib/types";
 
 export function Presets() {
-  const { connected, serviceRef, gameid, currentCfg, setCurrentCfg } =
-    useBlueRetro();
+  const { connected, currentCfg } = useBlueRetro();
   const [cfgId, setCfgId] = useState(0);
   const [consoleSel, setConsoleSel] = useState(-1);
   const [presetSel, setPresetSel] = useState(-1);
 
-  const swGameIdMutation = useMutation({
-    mutationFn: () =>
-      gattSerial(async () => {
-        await setGameIdCfg(serviceRef.current!);
-        return getCfgSrc(serviceRef.current!);
-      }),
-    onSuccess: (cfg) => setCurrentCfg(cfg),
-    onError: (error) => log("Argh! " + error),
-  });
-
-  const swDefaultMutation = useMutation({
-    mutationFn: () =>
-      gattSerial(async () => {
-        await setDefaultCfg(serviceRef.current!);
-        return getCfgSrc(serviceRef.current!);
-      }),
-    onSuccess: (cfg) => setCurrentCfg(cfg),
-    onError: (error) => log("Argh! " + error),
-  });
-
-  const savePresetMutation = useMutation({
-    mutationFn: ({ preset, cfgId }: { preset: Preset; cfgId: number }) =>
-      gattSerial(() => savePresetInput(preset, serviceRef.current!, cfgId)),
-    onError: (error) => log("Argh! " + error),
-  });
-
-  function swGameIdCfg() {
-    swGameIdMutation.mutate();
-  }
-
-  function swDefaultCfg() {
-    swDefaultMutation.mutate();
-  }
+  const savePresetMutation = useSaveInputCfg();
+  const locked = useCfgLocked(mutationKeys.saveInputCfg);
+  const [savedUnder, setSavedUnder] = useState<number>();
 
   function chooseConsole(value: number) {
     setConsoleSel(value);
@@ -85,9 +49,10 @@ export function Presets() {
 
   function saveInput() {
     if (presetSel != -1) {
+      setSavedUnder(currentCfg);
       savePresetMutation.mutate({
-        preset: presets[presetSel],
-        cfgId: Number(cfgId),
+        cfgId,
+        rows: presetMappings(presets[presetSel], cfgId),
       });
     }
   }
@@ -115,19 +80,14 @@ export function Presets() {
 
       {connected && (
         <>
-          <CfgSelection
-            currentCfg={currentCfg}
-            hasGameId={gameid.length > 0}
-            onSwitchToGameId={swGameIdCfg}
-            onSwitchToGlobal={swDefaultCfg}
-          />
+          <CfgSelection />
 
           <Card>
             <CardHeader>
               <CardTitle>Mapping Config</CardTitle>
             </CardHeader>
             <CardContent className="gap-6">
-              <FieldGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <FieldGroup className={FIELD_GRID}>
                 <Field>
                   <FieldLabel htmlFor="inputSelect">Output</FieldLabel>
                   <NativeSelect
@@ -196,7 +156,7 @@ export function Presets() {
                 </ItemContent>
               </Item>
 
-              {savePresetMutation.isSuccess && (
+              {savePresetMutation.isSuccess && savedUnder === currentCfg && (
                 <Alert>
                   <CircleCheckIcon />
                   <AlertTitle>
@@ -206,7 +166,7 @@ export function Presets() {
               )}
             </CardContent>
             <CardFooter className="border-t">
-              <Button onClick={saveInput} disabled={presetSel === -1}>
+              <Button onClick={saveInput} disabled={presetSel === -1 || locked}>
                 Save
               </Button>
             </CardFooter>

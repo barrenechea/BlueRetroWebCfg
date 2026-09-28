@@ -9,24 +9,16 @@ import {
 } from "@/components/ui/card";
 
 import type { DocRef } from "../lib/docs";
+import { useCfgLocked, useSwitchCfg } from "../lib/mutations";
+import { useBlueRetro } from "./BlueRetroContext";
 import { DocLink } from "./DocLink";
 
-interface CfgSelectionProps {
-  currentCfg: number;
-  hasGameId: boolean;
-  doc?: DocRef;
-  onSwitchToGameId: () => void;
-  onSwitchToGlobal: () => void;
-}
-
-export function CfgSelection({
-  currentCfg,
-  hasGameId,
-  doc,
-  onSwitchToGameId,
-  onSwitchToGlobal,
-}: CfgSelectionProps) {
+export function CfgSelection({ doc }: { doc?: DocRef }) {
+  const { gameid, currentCfg } = useBlueRetro();
   const isGlobal = currentCfg === 0;
+
+  const switchMutation = useSwitchCfg();
+  const busy = useCfgLocked();
 
   return (
     <Card>
@@ -44,13 +36,21 @@ export function CfgSelection({
           <Badge variant="secondary">{isGlobal ? "Global" : "GameID"}</Badge>
         </div>
         {isGlobal ? (
-          hasGameId && (
-            <Button variant="outline" onClick={onSwitchToGameId}>
+          gameid.length > 0 && (
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => switchMutation.mutate("gameid")}
+            >
               Switch to GameID
             </Button>
           )
         ) : (
-          <Button variant="outline" onClick={onSwitchToGlobal}>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => switchMutation.mutate("global")}
+          >
             Switch to Global
           </Button>
         )}

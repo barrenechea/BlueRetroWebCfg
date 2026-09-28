@@ -1,5 +1,10 @@
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import {
   HeadContent,
   Outlet,
@@ -32,7 +37,7 @@ import { ConsolePanel } from "../components/ConsolePanel";
 import { ThemeToggle } from "../components/ThemeToggle";
 import indexCss from "../index.css?url";
 import { links } from "../lib/docs";
-import { ChromeSamples, useLog } from "../lib/logger";
+import { ChromeSamples, log, useLog } from "../lib/logger";
 import { useLocalStorage } from "../lib/useLocalStorage";
 
 // Runs before hydration so the correct theme class is present on first paint.
@@ -78,14 +83,24 @@ function RootDocument({ children }: { children: ReactNode }) {
   );
 }
 
-// Focus refetches are off: they would hammer the GATT link.
+// Focus refetches are off: they would hammer the GATT link. The adapter is
+// reached over local Bluetooth, so reads and writes must not pause while the
+// browser reports being offline.
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: (error) => log("Argh! " + error) }),
+  mutationCache: new MutationCache({
+    onError: (error) => log("Argh! " + error),
+  }),
   defaultOptions: {
     queries: {
       gcTime: Infinity,
       staleTime: 0,
       retry: false,
       refetchOnWindowFocus: false,
+      networkMode: "always",
+    },
+    mutations: {
+      networkMode: "always",
     },
   },
 });
